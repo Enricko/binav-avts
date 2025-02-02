@@ -123,4 +123,21 @@ func init() {
 			&gin.ServiceProvider{},
 		},
 	})
+
+	config.Add("geoserver", map[string]any{
+        "url":      config.Env("GEOSERVER_URL", "http://localhost:8000/geoserver"),
+        "username": config.Env("GEOSERVER_USERNAME", "admin"),
+        "password": config.Env("GEOSERVER_PASSWORD", "geoserver"),
+    })
+	config.Add("filesystem", map[string]any{
+        "default": config.Env("FILESYSTEM_DISK", "local"),
+        "disks": map[string]any{
+            "local": map[string]any{
+                "driver": "local",
+                "root":   config.Env("FILESYSTEM_LOCAL_ROOT", "storage/app"),
+                "url":    config.Env("FILESYSTEM_LOCAL_URL", "storage"),
+            },
+        },
+    })
+
 }

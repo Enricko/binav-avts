@@ -12,7 +12,7 @@ import (
 func Web() {
 
 	facades.Route().Get("/", func(ctx http.Context) http.Response {
-		return ctx.Response().View().Make("welcome.tmpl", map[string]any{
+		return ctx.Response().View().Make("welcome.html", map[string]any{
 			"version": support.Version,
 		})
 	})
@@ -24,6 +24,13 @@ func Web() {
         r.Post("/auth/reset-password/verify", auth.VerifyOTP)
         r.Post("/auth/reset-password/reset", auth.ResetPassword)
     })
+
+	
+    geolayerController := controllers.NewGeolayerController()
+    
+	facades.Route().Get("/geolayers", geolayerController.Index)
+    facades.Route().Post("/geolayers", geolayerController.Store)
+    facades.Route().Delete("/geolayers/{id}", geolayerController.Destroy)
 
 	facades.Route().Get("/api/vessel/stream-history", (&controllers.VesselRecordController{}).StreamHistory)
 	

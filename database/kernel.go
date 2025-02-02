@@ -15,10 +15,11 @@ func (kernel Kernel) Migrations() []schema.Migration {
 	return []schema.Migration{
 		&migrations.M20240915060148CreateUsersTable{},
 		&migrations.M20250129040939CreateKapalsTable{},
-		&migrations.M20250129043528CreateMappingsTable{},
+		// &migrations.M20250129043528CreateMappingsTable{},
 		&migrations.M20250129043638CreateVesselRecordsTable{},
 		&migrations.M20250130041936CreateTelnetSessionsTable{},
 		&migrations.M20250130042025CreateTelnetRecordsTable{},
+		&migrations.M20250202155431CreateGeolayersTable{},
 	}
 }
 

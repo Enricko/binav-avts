@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Multi-Layer WMS Viewer</title>
+        <style>
+        #map {
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            max-height: 80vh;
+            overflow-y: auto;
+            min-width: 250px;
+        }
+        .layer-control {
+            margin: 5px 0;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .performance-controls {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ccc;
+            margin-bottom: 10px;
+        }
+        .layer-buttons {
+            margin-bottom: 10px;
+        }
+        .loading-indicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            display: none;
+            z-index: 2000;
+        }
+        </style>
+    </head>
+    <body>
+        <div class="controls" id="layerControls">
+            <h3>WMS Layers</h3>
+            <div class="layer-buttons">
+                <button onclick="toggleAllLayers(true)">Show All Layers</button>
+                <button onclick="toggleAllLayers(false)">Hide All Layers</button>
+            </div>
+            <div class="performance-controls">
+                <label>
+                    Image Format:
+                    <select id="imageFormat" onchange="updateLayerSettings()">
+                        <option value="image/png8">PNG8 (Faster)</option>
+                        <option value="image/jpeg">JPEG (Fastest)</option>
+                        <option value="image/png">PNG (Better Quality)</option>
+                    </select>
+                </label>
+                <br>
+                <label>
+                    Tile Size:
+                    <select id="tileSize" onchange="updateLayerSettings()">
+                        <option value="256">256x256 (Faster)</option>
+                        <option value="512">512x512 (Better Quality)</option>
+                    </select>
+                </label>
+            </div>
+            <div id="layerList"></div>
+        </div>
+        <div id="map"></div>
+        <div id="loadingIndicator" class="loading-indicator">Loading tiles...</div>
+
+        <script>
+        let map;
+        let wmsLayers = new Map();
+        const TILE_CACHE = new Map();
+        const MAX_CACHE_SIZE = 1000; // Reduced cache size
+        const REQUEST_QUEUE = new Set();
+        const MAX_CONCURRENT_REQUESTS = 4;
+        let activeRequests = 0;
+        let debounceTimer;
+
+        class TileLoader {
+            constructor() {
+                this.queue = [];
+                this.processing = false;
+                this.cache = new Map();
+            }
+
+            add(url, callback) {
+                // Check cache first
+                if (this.cache.has(url)) {
+                    callback(this.cache.get(url));
+                    return;
+                }
+
+                this.queue.push({ url, callback });
+                if (!this.processing) {
+                    this.processQueue();
+                }
+            }
+
+            async processQueue() {
+                if (this.queue.length === 0 || activeRequests >= MAX_CONCURRENT_REQUESTS) {
+                    this.processing = false;
+                    return;
+                }
+
+                this.processing = true;
+                const { url, callback } = this.queue.shift();
+                
+                if (this.cache.has(url)) {
+                    callback(this.cache.get(url));
+                    this.processQueue();
+                    return;
+                }
+
+                activeRequests++;
+                updateLoadingIndicator();
+
+                try {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    
+                    img.onload = () => {
+                        this.cache.set(url, img.src);
+                        if (this.cache.size > MAX_CACHE_SIZE) {
+                            const firstKey = this.cache.keys().next().value;
+                            this.cache.delete(firstKey);
+                        }
+                        callback(img.src);
+                        activeRequests--;
+                        updateLoadingIndicator();
+                        this.processQueue();
+                    };
+
+                    img.onerror = () => {
+                        activeRequests--;
+                        updateLoadingIndicator();
+                        this.processQueue();
+                    };
+
+                    img.src = url;
+                } catch (error) {
+                    activeRequests--;
+                    updateLoadingIndicator();
+                    this.processQueue();
+                }
+            }
+        }
+
+        const tileLoader = new TileLoader();
+
+        function createWMSLayer(layerInfo, opacity = 0.7) {
+            const wmsUrl = 'http://localhost:8000/geoserver/wms';
+            const tileSize = parseInt(document.getElementById('tileSize').value);
+            const imageFormat = document.getElementById('imageFormat').value;
+            
+            const wmsOptions = {
+                service: 'WMS',
+                version: '1.3.0',
+                request: 'GetMap',
+                layers: `${layerInfo.workspace}:${layerInfo.layer_name}`,
+                format: imageFormat,
+                transparent: true,
+                width: tileSize,
+                height: tileSize,
+                crs: 'EPSG:4326',
+                tiled: true,
+                buffer: 0,
+                format_options: 'dpi:180;quantizer:octree;antialias:none'
+            };
+
+            return new google.maps.ImageMapType({
+                getTileUrl: function(coord, zoom) {
+                    const proj = map.getProjection();
+                    const zfactor = Math.pow(2, zoom);
+                    
+                    const top = proj.fromPointToLatLng(
+                        new google.maps.Point(coord.x * tileSize / zfactor, coord.y * tileSize / zfactor)
+                    );
+                    const bot = proj.fromPointToLatLng(
+                        new google.maps.Point((coord.x + 1) * tileSize / zfactor, (coord.y + 1) * tileSize / zfactor)
+                    );
+
+                    const bbox = bot.lat() + ',' + top.lng() + ',' + top.lat() + ',' + bot.lng();
+                    const url = wmsUrl + '?' + Object.entries({
+                        ...wmsOptions,
+                        bbox: bbox
+                    }).map(([key, value]) => `${key}=${encodeURIComponent(value)}`).join('&');
+
+                    return url;
+                },
+                tileSize: new google.maps.Size(tileSize, tileSize),
+                opacity: opacity,
+                isPng: true,
+                maxZoom: 20
+            });
+        }
+
+        function updateLoadingIndicator() {
+            const indicator = document.getElementById('loadingIndicator');
+            if (activeRequests > 0) {
+                indicator.style.display = 'block';
+                indicator.textContent = `Loading tiles... (${activeRequests} requests)`;
+            } else {
+                indicator.style.display = 'none';
+            }
+        }
+
+        function toggleAllLayers(show) {
+            wmsLayers.forEach((layer, key) => {
+                const checkbox = document.querySelector(`input[data-layer="${key}"]`);
+                if (checkbox) {
+                    checkbox.checked = show;
+                    toggleLayer(key, show);
+                }
+            });
+        }
+
+        function toggleLayer(layerId, visible) {
+            const layer = wmsLayers.get(layerId);
+            if (layer) {
+                if (visible) {
+                    map.overlayMapTypes.push(layer);
+                } else {
+                    const index = map.overlayMapTypes.getArray().indexOf(layer);
+                    if (index > -1) {
+                        map.overlayMapTypes.removeAt(index);
+                    }
+                }
+            }
+        }
+
+        function updateLayerSettings() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const visibleLayers = new Set();
+                wmsLayers.forEach((layer, key) => {
+                    const checkbox = document.querySelector(`input[data-layer="${key}"]`);
+                    if (checkbox && checkbox.checked) {
+                        visibleLayers.add(key);
+                    }
+                });
+
+                // Clear existing layers
+                map.overlayMapTypes.clear();
+                wmsLayers.clear();
+                TILE_CACHE.clear();
+
+                // Recreate visible layers with new settings
+                visibleLayers.forEach(layerId => {
+                    const layerInfo = JSON.parse(document.querySelector(`input[data-layer="${layerId}"]`).dataset.info);
+                    const layer = createWMSLayer(layerInfo);
+                    wmsLayers.set(layerId, layer);
+                    map.overlayMapTypes.push(layer);
+                });
+            }, 500);
+        }
+
+        async function initMap() {
+            const script = document.createElement('script');
+            script.src = 'https://maps.googleapis.com/maps/api/js?callback=initMapCallback';
+            script.async = true;
+            script.defer = true;
+            document.head.appendChild(script);
+        }
+
+        async function initMapCallback() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 12,
+                center: { lat: -5.71899, lng: 117.80159 },
+                mapTypeId: google.maps.MapTypeId.ROADMAP,
+                maxZoom: 20,
+                tilt: 0,
+                zoomControl: true,
+                mapTypeControl: false,
+                scaleControl: false,
+                streetViewControl: false,
+                rotateControl: false,
+                fullscreenControl: false
+            });
+
+            try {
+                const response = await fetch('http://localhost:3000/geolayers');
+                const layers = await response.json();
+                
+                const layerList = document.getElementById('layerList');
+                const fragment = document.createDocumentFragment();
+                
+                layers.forEach((layerInfo) => {
+                    const div = document.createElement('div');
+                    div.className = 'layer-control';
+                    
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.dataset.layer = layerInfo.layer_name;
+                    checkbox.dataset.info = JSON.stringify(layerInfo);
+                    
+                    checkbox.onchange = (e) => {
+                        const layerId = e.target.dataset.layer;
+                        if (e.target.checked && !wmsLayers.has(layerId)) {
+                            const layer = createWMSLayer(JSON.parse(e.target.dataset.info));
+                            wmsLayers.set(layerId, layer);
+                            map.overlayMapTypes.push(layer);
+                        } else {
+                            toggleLayer(layerId, e.target.checked);
+                        }
+                    };
+                    
+                    const label = document.createElement('label');
+                    label.appendChild(checkbox);
+                    label.appendChild(document.createTextNode(' ' + layerInfo.layer_name));
+                    
+                    div.appendChild(label);
+                    fragment.appendChild(div);
+                });
+                
+                layerList.appendChild(fragment);
+            } catch (error) {
+                console.error('Error loading layers:', error);
+            }
+        }
+
+        window.onload = initMap;
+        </script>
+    </body>
+</html>

@@ -24,9 +24,14 @@ func init() {
 		// Supported Drivers: "local", "custom"
 		"disks": map[string]any{
 			"local": map[string]any{
-				"driver": "local",
-				"root":   path.Storage("app"),
-			},
+                "driver": "local",
+                "root":   config.Env("FILESYSTEM_LOCAL_ROOT", "storage/app"),
+                "url":    config.Env("FILESYSTEM_LOCAL_URL", "storage"),
+            },
+			// "local": map[string]any{
+			// 	"driver": "local",
+			// 	"root":   path.Storage("app"),
+			// },
 			"public": map[string]any{
 				"driver": "local",
 				"root":   path.Storage("app/public"),

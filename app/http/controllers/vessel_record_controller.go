@@ -73,8 +73,13 @@ func (c *VesselRecordController) StreamHistory(ctx contractshttp.Context) contra
     var request HistoryRequest
     
     if err := ctx.Request().Bind(&request); err != nil {
-        return ctx.Response().Json(400,response.Error(400, "Invalid request parameters", err.Error()))
+        return ctx.Response().Json(400, response.Error(400, "Invalid request parameters", err.Error()))
     }
+
+    // Validate time range
+    // if request.EndTime.Sub(request.StartTime) > 24*time.Hour {
+    //     return ctx.Response().Json(400, response.Error(400, "Time range cannot exceed 24 hours", ""))
+    // }
 
     // Set response headers for streaming 
     writer := ctx.Response().Writer()
@@ -82,74 +87,61 @@ func (c *VesselRecordController) StreamHistory(ctx contractshttp.Context) contra
     writer.Header().Set("Transfer-Encoding", "chunked")
     writer.WriteHeader(200)
 
-    // Setup streaming
-    done := make(chan bool)
-    notify := ctx.Request().Origin().Context().Done()
-    go func() {
-        <-notify
-        close(done)
-    }()
-
-    // Stream data
     var lastID uint64 = 0
-    batchSize := 1000
-    // hasRecords := false
+    const batchSize = 100 // Smaller batch size for faster streaming
 
     for {
-        select {
-        case <-done:
-            return nil
-        default:
-            var records []models.VesselRecord
+        var records []models.VesselRecord
+        err := facades.Orm().Query().Model(&models.VesselRecord{}).
+            Where("call_sign = ?", request.CallSign).
+            Where("created_at BETWEEN ? AND ?", request.StartTime, request.EndTime).
+            Where("id > ?", lastID).
+            Order("id ASC").
+            Limit(batchSize).
+            Find(&records)
 
-            err := facades.Orm().Query().
-                Where("call_sign = ?", request.CallSign).
-                Where("created_at BETWEEN ? AND ?", request.StartTime, request.EndTime).
-                Where("id > ?", lastID).
-                Order("id ASC").
-                Limit(batchSize).
-                Find(&records)
+        if err != nil {
+            return ctx.Response().Json(500, response.Error(500, "Database query failed", err.Error()))
+        }
 
+        if len(records) == 0 {
+            break
+        }
+
+        recordBatch := make([]byte, 0, len(records)*256)
+        for _, record := range records {
+            if record.ID > lastID {
+                lastID = record.ID
+            }
+
+            recordData := RecordData{
+                Timestamp:     record.CreatedAt,
+                CallSign:      record.CallSign,
+                Latitude:      record.Latitude,
+                Longitude:     record.Longitude,
+                HeadingDegree: record.HeadingDegree,
+                SpeedInKnots:  record.SpeedInKnots,
+                WaterDepth:    record.WaterDepth,
+                TelnetStatus:  string(record.TelnetStatus),
+                SeriesID:      int64(record.SeriesID),
+            }
+
+            jsonData, err := json.Marshal(recordData)
             if err != nil {
-                return ctx.Response().Json(500,response.Error(500, "Database query failed", err.Error()))
+                continue
             }
 
-            if len(records) == 0 {
-                break
-            }
+            recordBatch = append(recordBatch, jsonData...)
+            recordBatch = append(recordBatch, ',')
+        }
 
-            // Process and send each record individually
-            for _, record := range records {
-                if record.ID > lastID {
-                    lastID = record.ID
-                }
+        if len(recordBatch) > 0 {
+            writer.Write(recordBatch)
+            writer.(http.Flusher).Flush()
+        }
 
-                recordData := RecordData{
-                    Timestamp:     record.CreatedAt,
-                    CallSign:      record.CallSign,
-                    Latitude:      record.Latitude,
-                    Longitude:     record.Longitude,
-                    HeadingDegree: record.HeadingDegree,
-                    SpeedInKnots:  record.SpeedInKnots,
-                    WaterDepth:    record.WaterDepth,
-                    TelnetStatus:  string(record.TelnetStatus),
-                    SeriesID:      int64(record.SeriesID),
-                }
-
-                jsonData, err := json.Marshal(recordData)
-                if err != nil {
-                    continue
-                }
-
-                // Add comma after each record except the last one in the batch
-                writer.Write(append(jsonData, ','))
-                writer.(http.Flusher).Flush()
-                // hasRecords = true
-            }
-
-            if len(records) < batchSize {
-                break
-            }
+        if len(records) < batchSize {
+            break
         }
     }
 
