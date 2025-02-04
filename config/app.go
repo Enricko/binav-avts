@@ -118,8 +118,10 @@ func init() {
 			&providers.EventServiceProvider{},
 			&providers.ValidationServiceProvider{},
 			&providers.DatabaseServiceProvider{},
-			&providers.TelnetServiceProvider{},
-			&providers.WebSocketServiceProvider{},  // Then WebSocket service provider,
+			
+			&providers.TCPServerProvider{},
+			// &providers.TelnetServiceProvider{},
+			// &providers.WebSocketServiceProvider{},  // Then WebSocket service provider,
 			&gin.ServiceProvider{},
 		},
 	})
