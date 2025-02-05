@@ -142,4 +142,15 @@ func init() {
         },
     })
 
+	config.Add("tcp", map[string]any{
+		"navigation": map[string]any{
+			"host": config.Env("TCP_SERVER_NAVIGATION_HOST", "0.0.0.0"),
+			"port": config.Env("TCP_SERVER_NAVIGATION_PORT", "8080"),
+		},
+		"sensor": map[string]any{
+			"host": config.Env("TCP_SERVER_SENSOR_HOST", "0.0.0.0"),
+			"port": config.Env("TCP_SERVER_SENSOR_PORT", "8085"),
+		},
+	})
+
 }

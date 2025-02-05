@@ -43,8 +43,8 @@ type VesselData struct {
 	Calibration      int64 `json:"calibration"`
 	WidthM           int64 `json:"width_m"`
 	Height           int64 `json:"height_m"`
-	TopRange         int64 `json:"top_range"`
-	LeftRange        int64 `json:"left_range"`
+	BowToStern       int64 `json:"bow_to_stern"`
+	PortToStarboard  int64 `json:"port_to_starboard"`
 
 	// Images
 	ImageMap string `json:"image_map"`
@@ -221,8 +221,8 @@ func (ws *TelnetWebSocketService) broadcastVesselData() {
 						Calibration:                 kapal.Calibration,
 						WidthM:                      kapal.WidthM,
 						Height:                      kapal.Height,
-						TopRange:                    kapal.TopRange,
-						LeftRange:                   kapal.LeftRange,
+						BowToStern:                  kapal.BowToStern,
+						PortToStarboard:             kapal.PortToStarboard,
 						ImageMap:                    kapal.ImageMap,
 						Image:                       kapal.Image,
 						HistoryPerSecond:            kapal.HistoryPerSecond,
@@ -313,8 +313,8 @@ func (ws *TelnetWebSocketService) broadcastVesselData() {
 							Calibration:                 kapal.Calibration,
 							WidthM:                      kapal.WidthM,
 							Height:                      kapal.Height,
-							TopRange:                    kapal.TopRange,
-							LeftRange:                   kapal.LeftRange,
+							BowToStern:                  kapal.BowToStern,
+							PortToStarboard:             kapal.PortToStarboard,
 							ImageMap:                    kapal.ImageMap,
 							Image:                       kapal.Image,
 							HistoryPerSecond:            kapal.HistoryPerSecond,

@@ -11,17 +11,23 @@ import (
 
 type TCPServerProvider struct {
     app foundation.Application
-    tcpService *services.TCPService
+    tcpVesselService *services.TCPVesselService
+    tcpSensorService *services.TCPSensorService
 }
 
 func (provider *TCPServerProvider) Register(app foundation.Application) {
     fmt.Println("⚡ Registering TCP Server Provider")
 
     provider.app = app
-    provider.tcpService = services.NewTCPService()
+    provider.tcpVesselService = services.NewTCPVesselService()
+    provider.tcpSensorService = services.NewTCPSensorService()
 
-    facades.App().Singleton("tcp_service", func(app foundation.Application) (any, error) {
-        return provider.tcpService, nil
+    facades.App().Singleton("tcp_navigation_service", func(app foundation.Application) (any, error) {
+        return provider.tcpVesselService, nil
+    })
+
+    facades.App().Singleton("tcp_sensor_service", func(app foundation.Application) (any, error) {
+        return provider.tcpSensorService, nil
     })
 }
 
@@ -31,9 +37,22 @@ func (provider *TCPServerProvider) Boot(app foundation.Application) {
     // Start service in a goroutine with retry logic
     go func() {
         for {
-            err := provider.tcpService.Start()
+            err := provider.tcpVesselService.Start()
             if err != nil {
-                fmt.Printf("❌ TCP Server Error: %v\n", err)
+                fmt.Printf("❌ TCP Navigation Server Error: %v\n", err)
+                fmt.Println("🔄 Retrying in 5 seconds...")
+                time.Sleep(5 * time.Second)
+                continue
+            }
+            break
+        }
+    }()
+
+    go func() {
+        for {
+            err := provider.tcpSensorService.Start()
+            if err != nil {
+                fmt.Printf("❌ TCP Sensor Server Error: %v\n", err)
                 fmt.Println("🔄 Retrying in 5 seconds...")
                 time.Sleep(5 * time.Second)
                 continue

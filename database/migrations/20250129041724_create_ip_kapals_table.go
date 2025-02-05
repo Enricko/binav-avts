@@ -31,7 +31,7 @@ func (r *M20250129041724CreateIpKapalsTable) Up() error {
 			table.DateTime("updated_at")
 
 			// Foreign key
-			table.Foreign("call_sign").References("call_sign").On("kapals").CascadeOnDelete()
+			table.Foreign("call_sign").References("call_sign").On("kapals").CascadeOnUpdate().CascadeOnDelete()
 		})
 	}
 

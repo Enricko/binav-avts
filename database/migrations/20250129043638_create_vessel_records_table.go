@@ -51,7 +51,7 @@ func (r *M20250129043638CreateVesselRecordsTable) Up() error {
 			table.SoftDeletes()
 
 			// Foreign key constraint
-			table.Foreign("call_sign").References("call_sign").On("kapals").CascadeOnDelete()
+			table.Foreign("call_sign").References("call_sign").On("kapals").CascadeOnUpdate().CascadeOnDelete()
 		})
 	}
 

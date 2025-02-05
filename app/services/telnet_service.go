@@ -14,19 +14,6 @@ import (
 	"github.com/goravel/framework/facades"
 )
 
-type NMEABuffer struct {
-	Latitude            string
-	Longitude           string
-	HeadingDegree       float64
-	SpeedInKnots        float64
-	GpsQualityIndicator models.GpsQuality
-	WaterDepth          float64
-	LastGGATime         time.Time
-	LastRecordTime      time.Time
-	LastVTGTime         time.Time // Track when we last got VTG data
-	LastHDTTime         time.Time // Track when we last got HDT data
-	mutex               sync.Mutex
-}
 
 type TelnetService struct {
 	ctx         context.Context

@@ -17,9 +17,11 @@ func (kernel Kernel) Migrations() []schema.Migration {
 		&migrations.M20250129040939CreateKapalsTable{},
 		// &migrations.M20250129043528CreateMappingsTable{},
 		&migrations.M20250129043638CreateVesselRecordsTable{},
-		&migrations.M20250130041936CreateTelnetSessionsTable{},
-		&migrations.M20250130042025CreateTelnetRecordsTable{},
+		// &migrations.M20250130041936CreateTelnetSessionsTable{},
+		// &migrations.M20250130042025CreateTelnetRecordsTable{},
 		&migrations.M20250202155431CreateGeolayersTable{},
+		&migrations.M20250205140356CreateSensorsTable{},
+		&migrations.M20250205140421CreateSensorRecordsTable{},
 	}
 }
 
