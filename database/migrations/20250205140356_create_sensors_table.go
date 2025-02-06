@@ -19,6 +19,7 @@ func (r *M20250205140356CreateSensorsTable) Up() error {
 		return facades.Schema().Create("sensors", func(table schema.Blueprint) {
 			table.String("id", 50)
 			table.Primary("id")
+			table.String("name").Nullable()
 			table.Json("types").Comment("Array of sensor types: tide, weather, etc")
 			table.String("latitude").Nullable().Comment("No Movement Required")
 			table.String("longitude").Nullable().Comment("No Movement Required")

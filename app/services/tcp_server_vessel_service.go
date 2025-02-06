@@ -237,23 +237,24 @@ func (s *TCPVesselService) handleTCPData(data string) {
 		return
 	}
 
-	id, data := strings.TrimSpace(parts[0]), strings.Join(parts[1:], ",")
+	id, lines := strings.TrimSpace(parts[0]), strings.Split(strings.TrimSpace(strings.Join(parts[1:], ",")), "\n")
 	kapal, err := s.getKapal(id)
 
-	if err != nil {
-		if err.Error() == "record not found" {
-			facades.Log().Error("❌ Data not found for call sign: " + id)
+	for _, line := range lines {
+		if err != nil {
+			if err.Error() == "record not found" {
+				facades.Log().Error("❌ Data not found for call sign: " + id)
+				return
+			}
+			facades.Log().Error("❌ Database error", err)
 			return
 		}
-		facades.Log().Error("❌ Database error", err)
-		return
+
+		// Track this vessel as active
+		s.trackVessel(kapal)
+
+		s.processVesselData(*kapal, line)
 	}
-
-	// Track this vessel as active
-	s.trackVessel(kapal)
-
-	s.processVesselData(*kapal, data)
-	facades.Log().Info("📝 Data received for: " + kapal.CallSign)
 }
 
 func (s *TCPVesselService) processVesselData(kapal models.Kapal, data string) {
@@ -271,53 +272,64 @@ func (s *TCPVesselService) processVesselData(kapal models.Kapal, data string) {
 		}
 	}
 }
+
+
 func (s *TCPVesselService) processGGAData(kapal models.Kapal, data string) {
 	fields := strings.Split(data, ",")
 	if len(fields) < 15 {
-		facades.Log().Error("Invalid GGA sentence")
-		return
+		facades.Log().Debug(fmt.Sprintf("Invalid GGA sentence, padding with defaults: %s", data))
+		fields = append(fields, make([]string, 15-len(fields))...) // Pad with empty strings
 	}
-
+	
 	buffer := s.getOrCreateBuffer(kapal.CallSign)
 	buffer.mutex.Lock()
 	defer buffer.mutex.Unlock()
-
-	// Parse and update GGA data as before
-	latDMS, err := strconv.ParseFloat(fields[2], 64)
-	if err != nil {
-		facades.Log().Error("Error parsing latitude:", err)
-		return
+	
+	// Default values
+	latitude := "0.0"
+	longitude := "0.0"
+	
+	// Parse latitude if available
+	if fields[2] != "" && fields[3] != "" {
+		latDMS, err := strconv.ParseFloat(fields[2], 64)
+		if err == nil {
+			latitude = formatCoordinate(latDMS, fields[3])
+		} else {
+			facades.Log().Debug(fmt.Sprintf("Error parsing latitude, using default 0: %v", err))
+		}
 	}
-	latDir := fields[3]
-
-	longDMS, err := strconv.ParseFloat(fields[4], 64)
-	if err != nil {
-		facades.Log().Error("Error parsing longitude:", err)
-		return
+	
+	// Parse longitude if available
+	if fields[4] != "" && fields[5] != "" {
+		longDMS, err := strconv.ParseFloat(fields[4], 64)
+		if err == nil {
+			longitude = formatCoordinate(longDMS, fields[5])
+		} else {
+			facades.Log().Debug(fmt.Sprintf("Error parsing longitude, using default 0: %v", err))
+		}
 	}
-	longDir := fields[5]
-
-	latitude := formatCoordinate(latDMS, latDir)
-	longitude := formatCoordinate(longDMS, longDir)
-	gpsQuality := getGpsQualityFromIndicator(fields[6])
-
+	
+	// Default GPS quality to 0 if field is empty
+	var gpsQuality models.GpsQuality
+	if fields[6] != "" {
+		gpsQuality = getGpsQualityFromIndicator(fields[6])
+	}
+	
 	// Update buffer with new GGA data
 	buffer.Latitude = latitude
 	buffer.Longitude = longitude
 	buffer.GpsQualityIndicator = gpsQuality
 	buffer.LastGGATime = time.Now()
-
+	
 	// Check if we should create a record
 	if kapal.RecordStatus && time.Since(buffer.LastRecordTime) >= time.Duration(kapal.HistoryPerSecond)*time.Second {
 		timeSinceVTG := time.Since(buffer.LastVTGTime)
-
 		facades.Log().Debug(fmt.Sprintf(
 			"Creating record for %s - Current Speed: %.2f knots, Last VTG update: %v ago",
 			kapal.CallSign,
 			buffer.SpeedInKnots,
 			timeSinceVTG,
 		))
-
 		s.createVesselRecord(kapal.CallSign, buffer, kapal.HistoryPerSecond)
 		buffer.LastRecordTime = time.Now()
 	}
@@ -333,20 +345,6 @@ func (s *TCPVesselService) createVesselRecord(callSign string, buffer *NMEABuffe
 	var lastRecord models.VesselRecord
 	err := facades.Orm().Query().Where("call_sign = ?", callSign).Order("created_at DESC").First(&lastRecord)
 
-	// Debug log all values before creating record
-	facades.Log().Debug(fmt.Sprintf(
-		"Creating vessel record for %s:\n"+
-			"Speed: %.2f knots\n"+
-			"Position: %s, %s\n"+
-			"Heading: %.2f\n"+
-			"Last VTG update: %v ago",
-		callSign,
-		buffer.SpeedInKnots,
-		buffer.Latitude,
-		buffer.Longitude,
-		buffer.HeadingDegree,
-		time.Since(buffer.LastVTGTime),
-	))
 
 	newRecord := &models.VesselRecord{
 		CallSign:            callSign,
@@ -374,60 +372,59 @@ func (s *TCPVesselService) createVesselRecord(callSign string, buffer *NMEABuffe
 			callSign, newRecord.SpeedInKnots, newRecord.SeriesID))
 	}
 }
+
 func (s *TCPVesselService) processHDTData(kapal models.Kapal, data string) {
 	fields := strings.Split(data, ",")
 	if len(fields) < 3 {
-		facades.Log().Error("Invalid HDT sentence")
-		return
+		facades.Log().Debug(fmt.Sprintf("Invalid HDT sentence, using default values: %s", data))
+		fields = append(fields, make([]string, 3-len(fields))...) // Pad with empty strings
 	}
 
 	buffer := s.getOrCreateBuffer(kapal.CallSign)
 	buffer.mutex.Lock()
 	defer buffer.mutex.Unlock()
 
-	heading, err := strconv.ParseFloat(fields[1], 64)
-	if err != nil {
-		facades.Log().Error("Error parsing heading:", err)
-		return
+	// Default to 0 if field is empty or invalid
+	heading := 0.0
+	if fields[1] != "" {
+		parsedHeading, err := strconv.ParseFloat(fields[1], 64)
+		if err != nil {
+			facades.Log().Debug(fmt.Sprintf("Error parsing heading, using default 0: %v", err))
+		} else {
+			heading = parsedHeading
+		}
 	}
 
-	// Store the heading and update timestamp
 	buffer.HeadingDegree = heading
 	buffer.LastHDTTime = time.Now()
 }
+
 func (s *TCPVesselService) processVTGData(kapal models.Kapal, data string) {
 	fields := strings.Split(strings.TrimSpace(data), ",")
-
-	// Debug log the incoming VTG data
 	facades.Log().Debug(fmt.Sprintf("Processing VTG data for %s: %v", kapal.CallSign, fields))
 
-	// VTG has 10 fields including the sentence ID
-	if len(fields) < 6 {
-		facades.Log().Error(fmt.Sprintf("Invalid VTG sentence (not enough fields): %s", data))
-		return
-	}
-
-	// Speed is in field 5 (index 5)
-	speedField := strings.TrimSpace(fields[5])
-	if speedField == "" {
-		facades.Log().Debug(fmt.Sprintf("Empty speed field in VTG data for %s", kapal.CallSign))
-		return
+	if len(fields) < 10 {
+		facades.Log().Debug(fmt.Sprintf("Invalid VTG sentence, padding with defaults: %s", data))
+		fields = append(fields, make([]string, 10-len(fields))...) // Pad with empty strings
 	}
 
 	buffer := s.getOrCreateBuffer(kapal.CallSign)
 	buffer.mutex.Lock()
 	defer buffer.mutex.Unlock()
 
-	speedKnots, err := strconv.ParseFloat(speedField, 64)
-	if err != nil {
-		facades.Log().Error(fmt.Sprintf("Error parsing speed from VTG data: %v, Speed field: %s", err, speedField))
-		return
+	// Default to 0 if speed field is empty or invalid
+	speedKnots := 0.0
+	if fields[5] != "" {
+		parsedSpeed, err := strconv.ParseFloat(strings.TrimSpace(fields[5]), 64)
+		if err != nil {
+			facades.Log().Debug(fmt.Sprintf("Error parsing speed, using default 0: %v", err))
+		} else {
+			speedKnots = parsedSpeed
+		}
 	}
 
-	// Update the buffer with the new speed
 	buffer.SpeedInKnots = speedKnots
 	buffer.LastVTGTime = time.Now()
-
 	facades.Log().Debug(fmt.Sprintf("Updated VTG speed for %s: %.2f knots", kapal.CallSign, speedKnots))
 }
 

@@ -1,21 +1,48 @@
 package services
 
 import (
-    "fmt"
-    "net"
-    "strings"
-    "regexp"
-    "goravel/app/models"
-    "github.com/goravel/framework/facades"
+	"fmt"
+	"goravel/app/models"
+	"net"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/goravel/framework/facades"
 )
 
+type SensorBuffer struct {
+    RawData        string
+    LastUpdateTime time.Time
+    LastRecordTime time.Time
+    mutex          sync.Mutex
+}
+
 type TCPSensorService struct {
-    listener net.Listener
+    listener     net.Listener
+    bufferMutex  sync.Mutex
+    sensorBuffers map[string]*SensorBuffer  // key is sensor ID
+    activeSensors map[string]*models.Sensor // Track active sensors
 }
 
 func NewTCPSensorService() *TCPSensorService {
-    return &TCPSensorService{}
+    return &TCPSensorService{
+        sensorBuffers: make(map[string]*SensorBuffer),
+        activeSensors: make(map[string]*models.Sensor),
+    }
 }
+
+func (s *TCPSensorService) GetSensorBuffers() map[string]*SensorBuffer {
+    s.bufferMutex.Lock()
+    defer s.bufferMutex.Unlock()
+    return s.sensorBuffers
+}
+
+func (s *TCPSensorService) GetBufferMutex() *sync.Mutex {
+    return &s.bufferMutex
+}
+
 
 func (s *TCPSensorService) Start() error {
     host := facades.Config().GetString("tcp.sensor.host", "0.0.0.0")
@@ -65,8 +92,6 @@ func (s *TCPSensorService) handleConnection(conn net.Conn) {
         dataBuffer.Write(buffer[:n])
         data := dataBuffer.String()
 
-		fmt.Println(data)
-
         if strings.Contains(data, "\n") {
             messages := strings.Split(data, "\n")
             for _, msg := range messages[:len(messages)-1] {
@@ -83,8 +108,6 @@ func (s *TCPSensorService) handleConnection(conn net.Conn) {
 }
 
 func (s *TCPSensorService) processMessage(msg string) {
-    // Extract sensor ID from message using regex
-	fmt.Println(msg)
     re := regexp.MustCompile(`ID:(\d+)`)
     matches := re.FindStringSubmatch(msg)
     
@@ -95,7 +118,6 @@ func (s *TCPSensorService) processMessage(msg string) {
 
     sensorID := matches[1]
     
-    // Check if sensor exists in database
     var sensor models.Sensor
     err := facades.Orm().Query().Where("id = ?", sensorID).FirstOrFail(&sensor)
     if err != nil {
@@ -103,19 +125,46 @@ func (s *TCPSensorService) processMessage(msg string) {
         return
     }
 
-    // Create sensor record
-    record := &models.SensorRecord{
-        IDSensor: sensorID,
-        RawData:  msg,
+    buffer := s.getOrCreateBuffer(sensorID)
+    buffer.mutex.Lock()
+    defer buffer.mutex.Unlock()
+
+    buffer.RawData = msg
+    buffer.LastUpdateTime = time.Now()
+
+    if time.Since(buffer.LastRecordTime) >= time.Second {
+        record := &models.SensorRecord{
+            IDSensor: sensorID,
+            RawData:  buffer.RawData,
+        }
+
+        err = facades.Orm().Query().Create(record)
+        if err != nil {
+            facades.Log().Error(fmt.Sprintf("Failed to create sensor record: %v", err))
+            return
+        }
+
+        buffer.LastRecordTime = time.Now()
+        facades.Log().Info(fmt.Sprintf("Created record for sensor %s", sensorID))
+    }
+}
+
+func (s *TCPSensorService) getOrCreateBuffer(sensorID string) *SensorBuffer {
+    s.bufferMutex.Lock()
+    defer s.bufferMutex.Unlock()
+
+    if buffer, exists := s.sensorBuffers[sensorID]; exists {
+        return buffer
     }
 
-    err = facades.Orm().Query().Create(record)
-    if err != nil {
-        facades.Log().Error(fmt.Sprintf("Failed to create sensor record: %v", err))
-        return
+    now := time.Now()
+    buffer := &SensorBuffer{
+        LastUpdateTime: now,
+        LastRecordTime: now,
     }
 
-    facades.Log().Info(fmt.Sprintf("Created record for sensor %s", sensorID))
+    s.sensorBuffers[sensorID] = buffer
+    return buffer
 }
 
 func (s *TCPSensorService) Stop() error {

@@ -3,8 +3,10 @@ package models
 import (
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
+	"strings"
 	"time"
-
 )
 
 type GpsQuality string
@@ -65,4 +67,50 @@ func StringToGpsQuality(value string) (GpsQuality, error) {
 	default:
 		return "", errors.New("invalid GpsQuality value")
 	}
+}
+
+func ParseCoordinate(coord string) (float64, string) {
+	parts := strings.Split(strings.ReplaceAll(coord, "°", " "), " ")
+	if len(parts) < 3 {
+		return 0, ""
+	}
+
+	degrees, _ := strconv.ParseFloat(parts[0], 64)
+	minutes, _ := strconv.ParseFloat(parts[1], 64)
+	direction := parts[2]
+
+	decimal := degrees + minutes/60
+	if direction == "S" || direction == "W" {
+		decimal = -decimal
+	}
+
+	dms := fmt.Sprintf("%d°%g'%s", int(degrees), minutes, direction)
+
+	return decimal, dms
+}
+
+func CalculateFuelEfficiency(speedInKnots float64, min float64, max float64) float64 {
+	if speedInKnots <= 0 {
+		return 0
+	}
+	efficiency := (speedInKnots + min + max) / 3
+	return math.Round(efficiency*100) / 100
+}
+
+func GetFuelEfficiencyStatus(current, min, max float64) string {
+	if current <= 0 {
+		return "Stopped"
+	}
+
+	midpoint := (min + max) / 2
+
+	if current >= max {
+		return "Efficient"
+	} else if current >= midpoint {
+		return "Normal"
+	} else if current >= min {
+		return "Below Normal"
+	}
+
+	return "Inefficient"
 }

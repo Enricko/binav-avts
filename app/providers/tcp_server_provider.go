@@ -13,6 +13,7 @@ type TCPServerProvider struct {
     app foundation.Application
     tcpVesselService *services.TCPVesselService
     tcpSensorService *services.TCPSensorService
+    wsService *services.WebSocketService
 }
 
 func (provider *TCPServerProvider) Register(app foundation.Application) {
@@ -21,6 +22,7 @@ func (provider *TCPServerProvider) Register(app foundation.Application) {
     provider.app = app
     provider.tcpVesselService = services.NewTCPVesselService()
     provider.tcpSensorService = services.NewTCPSensorService()
+    provider.wsService = services.NewWebSocketService(provider.tcpVesselService, provider.tcpSensorService)
 
     facades.App().Singleton("tcp_navigation_service", func(app foundation.Application) (any, error) {
         return provider.tcpVesselService, nil
@@ -28,6 +30,11 @@ func (provider *TCPServerProvider) Register(app foundation.Application) {
 
     facades.App().Singleton("tcp_sensor_service", func(app foundation.Application) (any, error) {
         return provider.tcpSensorService, nil
+    })
+
+    // Bind service to container
+    facades.App().Bind("websocket_service", func(app foundation.Application) (any, error) {
+        return provider.wsService, nil
     })
 }
 
