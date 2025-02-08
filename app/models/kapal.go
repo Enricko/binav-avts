@@ -11,7 +11,7 @@ type Kapal struct {
 	HeadingDirection            int64      `gorm:"varchar(300);not null;" json:"heading_direction" binding:"required"`
 	Calibration                 int64      `gorm:"varchar(300);not null;" json:"calibration" binding:"required"`
 	WidthM                      int64      `gorm:"not null;" json:"width_m" binding:"required"`
-	Height                      int64      `gorm:"not null;" json:"height_m" binding:"required"`
+	LengthM                      int64      `gorm:"not null;" json:"length_m" binding:"required"`
 	BowToStern                  int64      `gorm:"not null;" json:"bow_to_stern" binding:"required"`
 	PortToStarboard             int64      `gorm:"not null;" json:"port_to_starboard" binding:"required"`
 	ImageMap                    string     `gorm:"type:TEXT;not null;" json:"image_map" binding:"required"`

@@ -1,0 +1,21 @@
+
+{{ define "layouts/main.html" }}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Binav AVTS</title>
+        <link href="/public/style.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v8.2.0/ol.css">
+        <script src="https://cdn.jsdelivr.net/npm/ol@v8.2.0/dist/ol.js"></script>
+    </head>
+    <body>
+        {{ template "layouts/header.html" . }}
+        {{ template "content" . }}
+        {{ template "layouts/footer.html" . }}
+        
+        
+    </body>
+</html>
+{{ end }}

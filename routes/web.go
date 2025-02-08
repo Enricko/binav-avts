@@ -3,19 +3,18 @@ package routes
 import (
 	"goravel/app/http/controllers"
 
-	"github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/facades"
-	"github.com/goravel/framework/support"
 	"github.com/goravel/framework/contracts/route"
 )
 
 func Web() {
 
-	facades.Route().Get("/", func(ctx http.Context) http.Response {
-		return ctx.Response().View().Make("welcome.html", map[string]any{
-			"version": support.Version,
-		})
-	})
+    facades.Route().Static("/public", "./public")
+    facades.Route().Static("storage", "./storage/app/public")
+
+	main := controllers.NewController()
+	facades.Route().Get("/", main.Index)
+
 	auth := controllers.NewAuthController()
 
     facades.Route().Group(func(r route.Router) {

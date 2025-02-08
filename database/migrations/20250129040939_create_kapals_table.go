@@ -29,7 +29,7 @@ func (r *M20250129040939CreateKapalsTable) Up() error {
 			table.BigInteger("heading_direction")
 			table.BigInteger("calibration")
 			table.BigInteger("width_m")
-			table.BigInteger("height_m")
+			table.BigInteger("length_m")
 			table.BigInteger("bow_to_stren")
 			table.BigInteger("port_starboard")
 			table.Text("image_map")
