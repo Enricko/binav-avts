@@ -11,8 +11,9 @@ var map = new ol.Map({
     }),
   ],
   view: new ol.View({
-    center: ol.proj.fromLonLat([118.0, -2.0]), // Center of Indonesia
-    zoom: 5,
+    // center: ol.proj.fromLonLat([118.0, -2.0]), // Center of Indonesia
+    center: ol.proj.fromLonLat([116.855698, -1.219515]), // Center of Indonesia
+    zoom: 20,
     extent: extent,
     minZoom: 5,
     maxZoom: 19

@@ -14,6 +14,7 @@ class MeasurementTool {
 
     this.map.addLayer(this.layer);
     this.setupRightClick();
+    this.createHistoryModal();
   }
 
   createStyle() {
@@ -33,6 +34,150 @@ class MeasurementTool {
         }),
       }),
     });
+  }
+
+  createHistoryModal() {
+    const modalHtml = `
+      <div class="modal fade" id="measurementHistoryModal" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-measure">
+              <div class="modal-content">
+                  <div class="modal-header bg-dark text-white py-2">
+                      <h6 class="modal-title">Measurement History</h6>
+                      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body p-2">
+                      <div id="measurementHistory" class="measurements-table mb-2">
+                          <div class="list-group list-group-flush">
+                              <div class="list-group-item text-center text-muted">
+                                  No measurements yet
+                              </div>
+                          </div>
+                      </div>
+                      <div class="d-flex justify-content-between gap-2">
+                          <button id="undoMeasure" class="btn btn-sm btn-outline-secondary" disabled>
+                              <i class="bi bi-arrow-counterclockwise"></i> Undo Last Point
+                          </button>
+                          <button id="clearMeasure" class="btn btn-sm btn-outline-danger">
+                              <i class="bi bi-trash"></i> Clear All
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>`;
+
+    document.body.insertAdjacentHTML("beforeend", modalHtml);
+
+    // Initialize modal
+    const modalElement = document.getElementById("measurementHistoryModal");
+    this.modal = new bootstrap.Modal(modalElement, {
+      backdrop: false,
+      keyboard: false,
+    });
+
+    // Set up button handlers
+    this.undoButton = document.getElementById("undoMeasure");
+    this.clearButton = document.getElementById("clearMeasure");
+    this.closeButton = modalElement.querySelector(".btn-close");
+
+    this.undoButton.addEventListener("click", () => this.removeLastPoint());
+    this.clearButton.addEventListener("click", () => {
+      // this.clear();
+      // this.updateHistoryPanel();
+      // Find and update measure button state
+      const measureButton = document.querySelector(".measure-button");
+      if (measureButton) {
+        measureButton.classList.remove("active");
+      }
+      // Deactivate and clear everything
+      this.deactivate();
+      this.clear();
+      this.modal.hide();
+    });
+
+    // Handle modal close button
+    this.closeButton.addEventListener("click", () => {
+      // Find and update measure button state
+      const measureButton = document.querySelector(".measure-button");
+      if (measureButton) {
+        measureButton.classList.remove("active");
+      }
+      // Deactivate and clear everything
+      this.deactivate();
+      this.clear();
+      this.modal.hide();
+    });
+
+    // Handle modal hide event (when clicking outside or using Esc key)
+    modalElement.addEventListener("hidden.bs.modal", () => {
+      const measureButton = document.querySelector(".measure-button");
+      if (measureButton) {
+        measureButton.classList.remove("active");
+      }
+      this.deactivate();
+      this.clear();
+    });
+
+    modalElement.addEventListener("mousedown", (e) => e.stopPropagation());
+    modalElement.addEventListener("touchstart", (e) => e.stopPropagation());
+  }
+
+  updateHistoryPanel() {
+    const historyDiv = document.getElementById("measurementHistory");
+    if (!this.currentPoint) {
+      historyDiv.innerHTML = `
+          <div class="list-group list-group-flush">
+              <div class="list-group-item text-center text-muted">
+                  No measurements yet
+              </div>
+          </div>`;
+      this.undoButton.disabled = true;
+      return;
+    }
+
+    const coords = this.currentPoint.getGeometry().getCoordinates();
+    if (coords.length < 2) {
+      historyDiv.innerHTML = `
+          <div class="list-group list-group-flush">
+              <div class="list-group-item text-center text-muted">
+                  Click to start measuring
+              </div>
+          </div>`;
+      this.undoButton.disabled = true;
+      return;
+    }
+
+    let html = '<div class="list-group list-group-flush">';
+    let totalDistance = 0;
+
+    // Add segments
+    for (let i = 0; i < coords.length - 1; i++) {
+      const segmentCoords = [coords[i], coords[i + 1]];
+      const length = this.calculateLength(segmentCoords);
+      totalDistance += length;
+      html += `
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+              <span class="text-muted">Segment ${i + 1}</span>
+              <span class="badge bg-primary rounded-pill">${this.formatLength(
+                length
+              )}</span>
+          </div>`;
+    }
+
+    // Add total
+    if (coords.length > 2) {
+      html += `
+          <div class="list-group-item d-flex justify-content-between align-items-center bg-light">
+              <strong>Total Distance</strong>
+              <span class="badge bg-success rounded-pill">${this.formatLength(
+                totalDistance
+              )}</span>
+          </div>`;
+    }
+
+    html += "</div>";
+    historyDiv.innerHTML = html;
+    this.undoButton.disabled = coords.length < 2;
   }
 
   setupRightClick() {
@@ -119,6 +264,9 @@ class MeasurementTool {
         "Total: " + this.formatLength(totalLength)
       );
     }
+
+    // Update history panel
+    this.updateHistoryPanel();
   }
 
   clearTooltips() {
@@ -196,24 +344,35 @@ class MeasurementTool {
     this.clearTooltips();
     this.source.clear();
     this.currentPoint = null;
+    this.updateHistoryPanel();
+  }
+
+  toggle() {
+    if (this.active) {
+      this.deactivate();
+      this.modal.hide();
+    } else {
+      this.clear();
+      this.activate();
+      this.modal.show();
+    }
   }
 
   clear() {
     this.source.clear();
     this.clearTooltips();
     this.currentPoint = null;
-  }
-
-  // Update toggle method
-  toggle() {
-    if (this.active) {
-      this.deactivate();
-    } else {
-      // Clear everything when starting new measurement
-      this.source.clear();
-      this.clearTooltips();
-      this.currentPoint = null;
-      this.activate();
+    const historyDiv = document.getElementById("measurementHistory");
+    if (historyDiv) {
+      historyDiv.innerHTML = `
+            <div class="list-group list-group-flush">
+                <div class="list-group-item text-center text-muted">
+                    No measurements yet
+                </div>
+            </div>`;
+    }
+    if (this.undoButton) {
+      this.undoButton.disabled = true;
     }
   }
 }

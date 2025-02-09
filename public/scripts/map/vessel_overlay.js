@@ -81,6 +81,12 @@ class VesselOverlay {
   createVesselStyle(feature) {
     const scale = this.calculateRealWorldScale();
 
+    // Create color overlay based on status
+    const statusColor =
+      this.status === "Connected"
+        ? [0, 255, 0, 0.3] // Green with 0.3 opacity for Connected
+        : [255, 0, 0, 0.3]; // Red with 0.3 opacity for Disconnected
+
     return new ol.style.Style({
       image: new ol.style.Icon({
         src: this.imageUrl,
@@ -90,6 +96,7 @@ class VesselOverlay {
         anchorXUnits: "fraction",
         anchorYUnits: "fraction",
         crossOrigin: "anonymous",
+        color: statusColor,
       }),
       text: this.createLabel(scale),
     });
@@ -97,13 +104,17 @@ class VesselOverlay {
 
   createFallbackStyle(feature) {
     const scale = this.calculateRealWorldScale();
+    const statusColor =
+      this.status === "Connected"
+        ? [0, 255, 0, 1] // Green with 0.3 opacity for Connected
+        : [255, 0, 0, 1]; // Red with 0.3 opacity for Disconnected
 
     return new ol.style.Style({
       image: new ol.style.RegularShape({
         points: 3,
         radius: 10 * scale,
         rotation: (this.rotationAngle * Math.PI) / 180,
-        fill: new ol.style.Fill({ color: "#ff0000" }),
+        fill: new ol.style.Fill({ color: statusColor }),
         stroke: new ol.style.Stroke({ color: "#ffffff", width: 2 }),
       }),
       text: this.createLabel(scale),
@@ -134,18 +145,19 @@ class VesselOverlay {
     const tooltipElement = document.createElement("div");
     tooltipElement.className = "vessel-tooltip";
     tooltipElement.style.cssText = `
-        display: none;
-        position: absolute;
-        background: rgba(0, 0, 0, 0.85);
-        padding: 15px;
-        border-radius: 4px;
-        font-family: sans-serif;
-        font-size: 12px;
-        color: white;
-        pointer-events: none;
-        z-index: 1000;
-        min-width: 200px;
-      `;
+      position: absolute;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      z-index: 1000;
+      font-size: 13px;
+      display: none;
+      pointer-events: none;
+      min-width: 250px;
+      border-left: 4px solid #2563EB;
+      font-family: 'Arial', sans-serif;
+    `;
 
     const tooltip = new ol.Overlay({
       element: tooltipElement,
@@ -172,50 +184,86 @@ class VesselOverlay {
       }
     });
   }
-
   createTooltipContent() {
+    const timestamp = new Date().toLocaleString();
     return `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-          <div style="font-size: 14px;">${this.device}</div>
-          <img src="${
-            this.imageDisplayUrl
-          }" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px;" />
+      <div style="color: #1F2937;">
+        <div style="display: flex; align-items: center; margin-bottom: 8px; gap: 8px;">
+          <div style="
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #2563EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+          ">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8c0 4-6 10-6 10s-6-6-6-10a6 6 0 0 1 12 0"/>
+              <circle cx="12" cy="8" r="2"/>
+            </svg>
+          </div>
+          <div>
+            <div style="font-weight: bold; font-size: 14px;">${
+              this.device
+            }</div>
+            <div style="font-size: 11px; color: #6B7280;">${timestamp}</div>
+          </div>
         </div>
-        <div style="display: grid; gap: 5px;">
+
+        <div style="
+          background: #F3F4F6;
+          padding: 8px;
+          border-radius: 4px;
+          margin: 8px 0;
+          font-size: 13px;
+          display: grid;
+          gap: 4px;
+        ">
           <div style="display: flex; justify-content: space-between;">
-            <span style="color: #aaa;">Latitude:</span>
-            <span>${this.position[1].toFixed(4)}°S</span>
+            <span style="color: #6B7280;">Heading</span>
+            <span style="font-weight: 500;">${this.rotationAngle.toFixed(
+              1
+            )}°</span>
           </div>
           <div style="display: flex; justify-content: space-between;">
-            <span style="color: #aaa;">Longitude:</span>
-            <span>${this.position[0].toFixed(4)}°E</span>
+            <span style="color: #6B7280;">Speed</span>
+            <span style="font-weight: 500;">${this.speed || "0"} knots</span>
           </div>
           <div style="display: flex; justify-content: space-between;">
-            <span style="color: #aaa;">Heading:</span>
-            <span>${this.rotationAngle.toFixed(1)}°</span>
+            <span style="color: #6B7280;">Water Depth</span>
+            <span style="font-weight: 500;">${
+              this.waterDepth || "0"
+            } meters</span>
           </div>
           <div style="display: flex; justify-content: space-between;">
-            <span style="color: #aaa;">Speed:</span>
-            <span>${this.speed || "0"} knots</span>
+            <span style="color: #6B7280;">GPS Quality</span>
+            <span style="font-weight: 500;">${
+              this.gpsQuality || "RTK Fixed"
+            }</span>
           </div>
           <div style="display: flex; justify-content: space-between;">
-            <span style="color: #aaa;">Water Depth:</span>
-            <span>${this.waterDepth || "0"} meters</span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span style="color: #aaa;">GPS Quality:</span>
-            <span>${this.gpsQuality || "RTK Fixed"}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between;">
-            <span style="color: #aaa;">Status:</span>
+            <span style="color: #6B7280;">Status</span>
             <span style="color: ${
-              this.status === "Connected" ? "#4CAF50" : "#f44336"
-            }">
+              this.status === "Connected" ? "#10B981" : "#EF4444"
+            }; font-weight: 500;">
               ${this.status || "Disconnected"}
             </span>
           </div>
         </div>
-      `;
+
+        <div style="
+          display: flex;
+          gap: 8px;
+          font-size: 11px;
+          color: #6B7280;
+        ">
+          <span>Lat: ${this.position[1].toFixed(6)}°S</span>
+          <span>Lon: ${this.position[0].toFixed(6)}°E</span>
+        </div>
+      </div>
+    `;
   }
 
   zoomToVessel() {
