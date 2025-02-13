@@ -5,9 +5,15 @@
 {{ define "content" }}
 
 <div id="map"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-crosshair"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
 <script src="/public/scripts/map/map.js"></script>
 <script src="/public/scripts/map/sensor_overlay.js"></script>
 <script src="/public/scripts/map/vessel_overlay.js"></script>
+<script src="/public/scripts/map/detail_overlay.js"></script>
 <script src="/public/scripts/map/websocket.js"></script>
 <script src="/public/scripts/map/measurement_tool.js"></script>
 <script src="/public/scripts/map/map_button.js"></script>

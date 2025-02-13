@@ -22,7 +22,6 @@ func (a StringArray) Value() (driver.Value, error) {
 
 type Sensor struct {
 	ID        string      `json:"id" gorm:"primaryKey"`
-	Name      string      `json:"name"`
 	Types     StringArray `json:"types" gorm:"type:json"`
 	Latitude  string      `json:"latitude"`
 	Longitude string      `json:"longitude"`

@@ -55,6 +55,7 @@ class VesselOverlay {
     this.map.addLayer(this.layer);
 
     this.addHoverInteraction();
+    this.addDoubleClickInteraction();
 
     this.map.getView().on(["change:resolution", "change:center"], () => {
       this.layer.changed();
@@ -184,6 +185,61 @@ class VesselOverlay {
       }
     });
   }
+
+  addDoubleClickInteraction() {
+    this.map.on("dblclick", (evt) => {
+      const pixel = this.map.getEventPixel(evt.originalEvent);
+      const hit = this.map.hasFeatureAtPixel(pixel, {
+        layerFilter: (layer) => layer === this.layer,
+        hitTolerance: 5,
+      });
+
+      if (hit) {
+        evt.stopPropagation(); // Stop event propagation
+        evt.preventDefault(); // Prevent default double-click zoom
+
+        const feature = this.layer
+          .getSource()
+          .getClosestFeatureToCoordinate(evt.coordinate);
+        if (feature === this.feature) {
+          const searchInput = document.querySelector(".search-input");
+          if (searchInput) {
+            searchInput.value = this.device;
+          }
+
+          const vessel = wsData.navigation[this.device];
+          if (vessel) {
+            detailOverlay.showVesselDetails(vessel);
+          }
+
+          this.zoomToVessel();
+
+          const element = document.createElement("div");
+          element.className = "pulse-animation";
+          element.style.cssText = `
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(37, 99, 235, 0.3);
+            animation: pulse 1s ease-out;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+          `;
+
+          const pulseOverlay = new ol.Overlay({
+            element: element,
+            position: evt.coordinate,
+            positioning: "center-center",
+          });
+
+          this.map.addOverlay(pulseOverlay);
+          setTimeout(() => this.map.removeOverlay(pulseOverlay), 1000);
+        }
+      }
+    });
+  }
+
   createTooltipContent() {
     const timestamp = new Date().toLocaleString();
     return `

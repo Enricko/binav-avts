@@ -15,12 +15,12 @@ class SensorOverlay {
   }
 
   updateVisibility(zoom) {
-    Object.values(this.sensorOverlays).forEach(overlay => {
+    Object.values(this.sensorOverlays).forEach((overlay) => {
       const element = overlay.getElement();
-      if (zoom >= 11 && zoom <= 20) {
-        element.style.display = 'block';
+      if (zoom >= 10 && zoom <= 20) {
+        element.style.display = "block";
       } else {
-        element.style.display = 'none';
+        element.style.display = "none";
         // Hide tooltip when sensors are hidden
         this.hideTooltip();
       }
@@ -64,60 +64,61 @@ class SensorOverlay {
                   <path d="M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>
                 </svg>`,
         color: "#3B82F6",
-        label: "Tide Sensor",
+        label: "Tide Gauge",
       },
       // Add more types here as needed
     };
     return styles[type] || styles.tide; // Default to tide style if type not found
   }
 
+  // Add this to SensorOverlay class
+
   createSensorElement(sensor) {
     const element = document.createElement("div");
     element.className = "sensor-marker";
     const typeStyle = this.getTypeStyle(sensor.types[0]);
 
-    // Create container for better hover effect
     element.style.cssText = `
-        width: 32px;
-        height: 32px;
-        position: absolute;
-        transform: translate(-50%, -50%);
-        cursor: pointer;
-        transition: all 0.3s ease;
-      `;
+    width: 32px;
+    height: 32px;
+    position: absolute;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    transition: all 0.3s ease;
+  `;
 
-    // Create the actual marker
     element.innerHTML = `
-        <div style="
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background-color: ${typeStyle.color};
-          border: 3px solid white;
-          border-radius: 50%;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-          transition: all 0.3s ease;
-          color: white;
-        ">
-          ${typeStyle.icon}
-        </div>
-        <div style="
-          position: absolute;
-          bottom: -4px;
-          right: -4px;
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background-color: ${
-            sensor.connection_status === "Connected" ? "#10B981" : "#EF4444"
-          };
-          border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        "></div>
-      `;
+    <div style="
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: ${typeStyle.color};
+      border: 3px solid white;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      transition: all 0.3s ease;
+      color: white;
+    ">
+      ${typeStyle.icon}
+    </div>
+    <div style="
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: ${
+        sensor.connection_status === "Connected" ? "#10B981" : "#EF4444"
+      };
+      border: 2px solid white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    "></div>
+  `;
 
+    // Mouse events
     element.addEventListener("mouseenter", () => {
       const markerDiv = element.querySelector("div");
       markerDiv.style.transform = "scale(1.1)";
@@ -132,8 +133,101 @@ class SensorOverlay {
       this.hideTooltip();
     });
 
+    // Double click handler
+    element.addEventListener("dblclick", (evt) => {
+      evt.stopPropagation();
+      evt.preventDefault();
+      const searchInput = document.querySelector(".search-input");
+      if (searchInput) {
+        searchInput.value = sensor.websocketKey;
+      }
+
+      detailOverlay.showSensorDetails(sensor);
+
+      const coordinate = ol.proj.fromLonLat([
+        parseFloat(sensor.longitude),
+        parseFloat(sensor.latitude),
+      ]);
+
+      this.map.getView().animate({
+        center: coordinate,
+        zoom: 18,
+        duration: 1000,
+      });
+
+      // Pulse animation
+      const pulseElement = document.createElement("div");
+      pulseElement.style.cssText = `
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(59, 130, 246, 0.3);
+      animation: pulse 1s ease-out;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+    `;
+
+      const pulseOverlay = new ol.Overlay({
+        element: pulseElement,
+        position: coordinate,
+        positioning: "center-center",
+      });
+
+      this.map.addOverlay(pulseOverlay);
+      setTimeout(() => this.map.removeOverlay(pulseOverlay), 1000);
+    });
+
     return element;
   }
+
+  // addDoubleClickHandler(element, sensor) {
+  //   element.addEventListener("dblclick", (evt) => {
+  //     console.log("Double click event");
+  //     evt.stopPropagation();
+  //     evt.preventDefault();
+
+  //     const markerDiv = element.querySelector("div");
+  //     if (!markerDiv) return;
+
+  //     // Get current zoom level
+  //     const zoom = this.map.getView().getZoom();
+  //     if (zoom < 10 || zoom > 20) return;
+
+  //     const coordinate = ol.proj.fromLonLat([
+  //       parseFloat(sensor.longitude),
+  //       parseFloat(sensor.latitude),
+  //     ]);
+
+  //     this.map.getView().animate({
+  //       center: coordinate,
+  //       zoom: 18,
+  //       duration: 1000,
+  //     });
+
+  //     // Create pulse animation
+  //     const pulseElement = document.createElement("div");
+  //     pulseElement.style.cssText = `
+  //       position: absolute;
+  //       width: 40px;
+  //       height: 40px;
+  //       border-radius: 50%;
+  //       background: rgba(59, 130, 246, 0.3);
+  //       animation: pulse 1s ease-out;
+  //       pointer-events: none;
+  //       transform: translate(-50%, -50%);
+  //     `;
+
+  //     const pulseOverlay = new ol.Overlay({
+  //       element: pulseElement,
+  //       position: coordinate,
+  //       positioning: "center-center",
+  //     });
+
+  //     this.map.addOverlay(pulseOverlay);
+  //     setTimeout(() => this.map.removeOverlay(pulseOverlay), 1000);
+  //   });
+  // }
 
   showTooltip(sensor) {
     const tooltipElement = this.tooltipOverlay.getElement();
@@ -163,7 +257,7 @@ class SensorOverlay {
             <div>
               <div style="font-weight: bold; font-size: 14px;">${
                 typeStyle.label
-              } - ${sensor.websocketKey}</div>
+              } - ${sensor.id}</div>
               <div style="font-size: 11px; color: #6B7280;">${timestamp}</div>
             </div>
           </div>
@@ -219,6 +313,18 @@ class SensorOverlay {
   updateSensors(sensors) {
     Object.entries(sensors).forEach(([sensorId, sensor]) => {
       try {
+        // Validate coordinates
+        if (
+          !this.isValidLatitude(sensor.latitude) ||
+          !this.isValidLongitude(sensor.longitude)
+        ) {
+          // console.error(`Invalid coordinates for sensor ${sensorId}:`, {
+          //   latitude: sensor.latitude,
+          //   longitude: sensor.longitude,
+          // });
+          return; // Skip this sensor
+        }
+
         const position = ol.proj.fromLonLat([
           parseFloat(sensor.longitude),
           parseFloat(sensor.latitude),
@@ -235,9 +341,8 @@ class SensorOverlay {
             stopEvent: false,
           });
 
-          // Set initial visibility based on current zoom
           const zoom = this.map.getView().getZoom();
-          element.style.display = (zoom >= 11 && zoom <= 20) ? 'block' : 'none';
+          element.style.display = zoom >= 10 && zoom <= 20 ? "block" : "none";
 
           this.sensorOverlays[sensorId] = overlay;
           this.map.addOverlay(overlay);
@@ -262,5 +367,15 @@ class SensorOverlay {
         tooltipElement.parentNode.removeChild(tooltipElement);
       }
     }
+  }
+
+  isValidLatitude(lat) {
+    const latitude = parseFloat(lat);
+    return !isNaN(latitude) && latitude >= -90 && latitude <= 90;
+  }
+
+  isValidLongitude(lon) {
+    const longitude = parseFloat(lon);
+    return !isNaN(longitude) && longitude >= -180 && longitude <= 180;
   }
 }

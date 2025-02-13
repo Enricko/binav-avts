@@ -5,6 +5,10 @@ const sensorOverlayManager = new SensorOverlay(map);
 ws.onmessage = (event) => {
   const data = JSON.parse(event.data);
 
+  // Update wsData for search functionality
+  if (data.navigation) wsData.navigation = data.navigation;
+  if (data.sensors) wsData.sensors = data.sensors;
+
   // Handle vessel data
   if (data.navigation) {
     Object.entries(data.navigation).forEach(([callSign, vessel]) => {
@@ -44,6 +48,11 @@ ws.onmessage = (event) => {
   // Handle sensor data
   if (data.sensors) {
     sensorOverlayManager.updateSensors(data.sensors);
+  }
+
+  // Always update dropdown if search has input
+  if (document.activeElement === searchInput && searchInput.value) {
+    updateDropdown(searchInput.value);
   }
 };
 
