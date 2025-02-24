@@ -25,9 +25,9 @@ ws.onmessage = (event) => {
           rotationAngle: vessel.telemetry.heading_degree,
           status: vessel.telemetry.telnet_status,
           device: vessel.call_sign,
-          imageUrl: `/storage${vessel.vessel.vessel_map_image}`,
+          imageUrl: `${vessel.vessel.vessel_map_image}`,
           imageDisplayUrl:
-            vessel.vessel.image || `/storage${vessel.vessel.vessel_map_image}`,
+            vessel.vessel.image || `${vessel.vessel.vessel_map_image}`,
           speed: vessel.telemetry.speed_in_knots,
           waterDepth: vessel.telemetry.water_depth,
           gpsQuality: vessel.telemetry.gps_quality_indicator,

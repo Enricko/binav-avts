@@ -1,142 +1,3 @@
-// Add custom styles
-const style = document.createElement("style");
-style.textContent = `
-  .map-controls {
-    position: absolute;
-    bottom: 24px;
-    right: 24px;
-    z-index: 1000;
-  }
-
-  .zoom-controls {
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,.15);
-    overflow: hidden;
-  }
-
-  .zoom-button {
-    width: 44px;
-    height: 44px;
-    border: none;
-    background: white;
-    color: #333;
-    font-size: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-
-  .zoom-button:hover {
-    background: #f8f9fa;
-    color: #0d6efd;
-  }
-
-  .zoom-divider {
-    height: 1px;
-    background: #dee2e6;
-    margin: 0;
-  }
-
-  .measure-control {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 1060;
-  }
-
-  .measure-button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: white;
-    border: none;
-    border-radius: 8px;
-    padding: 8px 16px;
-    font-size: 14px;
-    color: #333;
-    box-shadow: 0 2px 6px rgba(0,0,0,.15);
-    transition: all 0.2s;
-  }
-
-  .measure-button:hover {
-    background: #f8f9fa;
-    color: #0d6efd;
-    box-shadow: 0 4px 12px rgba(0,0,0,.15);
-  }
-
-  .measure-button.active {
-    background: #e7f1ff;
-    color: #0d6efd;
-  }
-
-  .measure-button svg {
-    width: 18px;
-    height: 18px;
-  }
-
-  .modal-measure {
-    position: absolute;
-    left: 10px;
-    top: 120px;
-    margin: 0;
-    width: 280px;
-    pointer-events: auto;
-  }
-
-  .modal-backdrop {
-    display: none;
-}
-
-  .modal {
-    background: none;
-    pointer-events: none;
-  }
-
-  .modal-content {
-    pointer-events: auto;
-    box-shadow: 0 2px 8px rgba(0,0,0,.2);
-  }
-
-  .list-group-item {
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-  }
-
-  .measurements-table {
-    max-height: 200px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-  }
-
-  .measurements-table::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .measurements-table::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-  }
-
-  .measurements-table::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 3px;
-  }
-
-  .measurements-table::-webkit-scrollbar-thumb:hover {
-    background: #555;
-  }
-
-  .ol-control {
-    z-index: 1060;
-  }
-    
-`;
-
-document.head.appendChild(style);
-
 // Create zoom controls
 const zoomContainer = document.createElement("div");
 zoomContainer.className = "map-controls";
@@ -182,6 +43,81 @@ measureContainer.appendChild(measureButton);
 document.querySelector("#map").appendChild(zoomContainer);
 document.querySelector("#map").appendChild(measureContainer);
 
+// Create search control
+const searchContainer = document.createElement("div");
+searchContainer.className = "search-control";
+
+const searchInputGroup = document.createElement("div");
+searchInputGroup.className = "input-group search-input-group";
+
+const searchInput = document.createElement("input");
+searchInput.type = "text";
+searchInput.className = "form-control search-input";
+searchInput.placeholder = "Search vessels & sensors...";
+
+const searchButton = document.createElement("button");
+searchButton.className = "btn search-button";
+searchButton.innerHTML = '<i class="bi bi-search"></i>';
+
+const searchDropdown = document.createElement("div");
+searchDropdown.className = "search-dropdown";
+
+searchInputGroup.appendChild(searchInput);
+searchInputGroup.appendChild(searchButton);
+searchContainer.appendChild(searchInputGroup);
+searchContainer.appendChild(searchDropdown);
+
+// Create navigation menu container
+const navContainer = document.createElement("div");
+navContainer.className = "nav-control";
+
+// Create burger button
+const burgerButton = document.createElement("button");
+burgerButton.className = "nav-button";
+burgerButton.innerHTML = `
+  <i class="bi bi-list"></i>
+`;
+burgerButton.title = "Navigation Menu";
+
+// Create dropdown menu
+const navDropdown = document.createElement("div");
+navDropdown.className = "nav-dropdown";
+
+// Create navigation items
+const navItems = [
+  { icon: 'fa-solid fa-ship', label: 'Vessels', action: () => console.log('Vessels clicked') },
+  { icon: 'bi bi-broadcast', label: 'Sensors', action: () => console.log('Sensors clicked') },
+  { icon: 'bi bi-layers', label: 'GeoLayer', action: () => console.log('GeoLayer clicked') },
+  { icon: 'bi bi-people', label: 'Users', action: () => console.log('Users clicked') }
+];
+
+// Create list group for nav items
+const listGroup = document.createElement("div");
+listGroup.className = "list-group";
+
+navItems.forEach(item => {
+  const navItem = document.createElement("button");
+  navItem.className = "list-group-item list-group-item-action d-flex align-items-center gap-2";
+  navItem.innerHTML = `
+    <i class="${item.icon}"></i>
+    <span>${item.label}</span>
+  `;
+  navItem.addEventListener('click', (e) => {
+    e.preventDefault();
+    item.action();
+    navDropdown.classList.remove('show');
+  });
+  listGroup.appendChild(navItem);
+});
+
+navDropdown.appendChild(listGroup);
+navContainer.appendChild(burgerButton);
+navContainer.appendChild(navDropdown);
+
+// Add controls to map
+document.querySelector("#map").appendChild(navContainer);
+document.querySelector("#map").appendChild(searchContainer);
+
 // Initialize map controls
 const initMapControls = (map) => {
   // Remove default controls
@@ -224,206 +160,29 @@ const initMapControls = (map) => {
   return measureTool;
 };
 
-// Initialize controls after a small delay
-setTimeout(() => {
-  const measureTool = initMapControls(map);
-}, 100);
+// Toggle burger menu dropdown
+burgerButton.addEventListener('click', (e) => {
+  e.preventDefault();
+  navDropdown.classList.toggle('show');
+});
 
-// Modern search control styles
-const searchStyle = document.createElement("style");
-searchStyle.textContent = `
-  .search-control {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 1070;
-    width: 300px;
+// Close dropdowns when clicking outside
+document.addEventListener('click', (e) => {
+  if (!navContainer.contains(e.target)) {
+    navDropdown.classList.remove('show');
   }
-
-  .measure-control {
-    top: 70px;
+  if (!searchContainer.contains(e.target)) {
+    searchDropdown.classList.remove('show');
   }
-
-  .search-input-group {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(8px);
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    transition: all 0.3s ease;
-  }
-
-  .search-input-group:hover,
-  .search-input-group:focus-within {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 24px rgba(0,0,0,0.15);
-  }
-
-  .search-input {
-    border: none;
-    background: transparent;
-    padding: 12px 16px;
-    font-size: 15px;
-    color: #2c3e50;
-    transition: all 0.3s;
-  }
-
-  .search-input::placeholder {
-    color: #94a3b8;
-  }
-
-  .search-button {
-    padding: 8px 16px;
-    border: none;
-    background: transparent;
-    color: #3b82f6;
-    transition: all 0.2s;
-  }
-
-  .search-button:hover {
-    color: #1d4ed8;
-    transform: scale(1.1);
-  }
-
-  .search-dropdown {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
-    width: 100%;
-    background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(8px);
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    margin-top: 4px;
-    max-height: 400px;
-    overflow-y: auto;
-    display: none;
-    transition: all 0.3s;
-    scrollbar-width: thin;
-    scrollbar-color: #94a3b8 transparent;
-  }
-
-  .search-dropdown::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .search-dropdown::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .search-dropdown::-webkit-scrollbar-thumb {
-    background-color: #94a3b8;
-    border-radius: 3px;
-  }
-
-  .search-dropdown.show {
-    display: block;
-    animation: dropdownFade 0.3s ease;
-  }
-
-  @keyframes dropdownFade {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .search-dropdown-item {
-    padding: 12px 16px;
-    cursor: pointer;
-    transition: all 0.2s;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: #1e293b;
-  }
-
-  .search-dropdown-item:hover {
-    background: #f1f5f9;
-    transform: translateX(4px);
-  }
-
-  .search-category {
-    font-weight: 600;
-    color: #64748b;
-    padding: 8px 16px;
-    background: #f8fafc;
-    font-size: 13px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-  }
-
-  .item-status {
-    font-size: 13px;
-    padding: 4px 8px;
-    border-radius: 6px;
-    margin-left: auto;
-  }
-
-  .status-connected {
-    background: #dcfce7;
-    color: #15803d;
-  }
-
-  .status-disconnected {
-    background: #fee2e2;
-    color: #b91c1c;
-  }
-
-  .vessel-speed {
-    font-size: 13px;
-    color: #64748b;
-  }
-`;
-
-document.head.appendChild(searchStyle);
-
-// Create search control with modern icons
-const searchContainer = document.createElement("div");
-searchContainer.className = "search-control";
-
-const searchInputGroup = document.createElement("div");
-searchInputGroup.className = "input-group search-input-group";
-
-const searchInput = document.createElement("input");
-searchInput.type = "text";
-searchInput.className = "form-control search-input";
-searchInput.placeholder = "Search vessels & sensors...";
-
-const searchButton = document.createElement("button");
-searchButton.className = "btn search-button";
-searchButton.innerHTML = '<i class="bi bi-search"></i>';
-
-const searchDropdown = document.createElement("div");
-searchDropdown.className = "search-dropdown";
-
-searchInputGroup.appendChild(searchInput);
-searchInputGroup.appendChild(searchButton);
-searchContainer.appendChild(searchInputGroup);
-searchContainer.appendChild(searchDropdown);
-
-document.querySelector("#map").appendChild(searchContainer);
+});
 
 // WebSocket data store
-let wsData = {
+window.wsData = {
   navigation: {},
   sensors: {},
 };
 
-// Update WebSocket data
-// ws.onmessage = (event) => {
-//   const data = JSON.parse(event.data);
-//   if (data.navigation) wsData.navigation = data.navigation;
-//   if (data.sensors) wsData.sensors = data.sensors;
-
-//   if (searchDropdown.classList.contains("show")) {
-//     updateDropdown(searchInput.value);
-//   }
-// };
-
+// Search functionality
 function handleSearch() {
   const searchTerm = searchInput.value;
   if (!searchTerm) return;
@@ -440,7 +199,7 @@ function handleSearch() {
       duration: 800,
       easing: ol.easing.easeOut,
     });
-    detailOverlay.showVesselDetails(vessel);
+    vesselDetail.showVesselDetails(vessel);
   }
 
   // Check sensors
@@ -455,21 +214,9 @@ function handleSearch() {
       duration: 800,
       easing: ol.easing.easeOut,
     });
-    detailOverlay.showSensorDetails(sensor);
+    sensorDetail.showSensorDetails(sensor);
   }
-
-  // updateDropdown(searchTerm);
-  // setTimeout(() => {
-  //   const dropdownItems = searchDropdown.querySelectorAll(
-  //     ".search-dropdown-item"
-  //   );
-  //   if (dropdownItems.length > 0) {
-  //     dropdownItems[0].click();
-  //   }
-  // }, 100);
 }
-
-searchButton.addEventListener("click", handleSearch);
 
 function updateDropdown(searchTerm) {
   searchDropdown.innerHTML = "";
@@ -517,7 +264,7 @@ function updateDropdown(searchTerm) {
         searchInput.value = key;
         searchDropdown.classList.remove("show");
 
-        detailOverlay.showVesselDetails(vessel);
+        vesselDetail.showVesselDetails(vessel);
 
         map.getView().animate({
           center: ol.proj.fromLonLat([
@@ -561,16 +308,14 @@ function updateDropdown(searchTerm) {
           <div>${sensor.id}</div>
           <div class="vessel-speed">${sensor.types.join(", ")}</div>
         </div>
-        <span class="item-status ${statusClass}">${
-        sensor.connection_status
-      }</span>
+        <span class="item-status ${statusClass}">${sensor.connection_status}</span>
       `;
 
       item.addEventListener("click", () => {
         searchInput.value = sensor.id;
         searchDropdown.classList.remove("show");
 
-        detailOverlay.showSensorDetails(sensor);
+        sensorDetail.showSensorDetails(sensor);
 
         map.getView().animate({
           center: ol.proj.fromLonLat([
@@ -589,6 +334,8 @@ function updateDropdown(searchTerm) {
   searchDropdown.classList.toggle("show", hasResults);
 }
 
+searchButton.addEventListener("click", handleSearch);
+
 searchInput.addEventListener("input", (e) => {
   updateDropdown(e.target.value);
 });
@@ -603,8 +350,7 @@ searchInput.addEventListener("keypress", (e) => {
   }
 });
 
-document.addEventListener("click", (e) => {
-  if (!searchContainer.contains(e.target)) {
-    searchDropdown.classList.remove("show");
-  }
-});
+// Initialize controls after a small delay
+setTimeout(() => {
+  const measureTool = initMapControls(map);
+}, 100);

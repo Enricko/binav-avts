@@ -7,8 +7,7 @@ class VesselOverlay {
     this.rotationAngle = options.rotationAngle || 0;
     this.status = options.status || "Unknown";
     this.device = options.device;
-    this.imageUrl = options.imageUrl;
-    this.imageDisplayUrl = options.imageDisplayUrl;
+    this.imageUrl = options.imageUrl || "/storage/vessel_map/default.png"; // Set default path
     this.speed = options.speed;
     this.waterDepth = options.waterDepth;
     this.gpsQuality = options.gpsQuality;
@@ -20,7 +19,7 @@ class VesselOverlay {
       })
       .catch((error) => {
         console.error("Failed to load vessel image:", error);
-        this.createLayerWithFallback();
+        this.createLayer(); // Will use fallback style if image not loaded
       });
   }
 
@@ -81,26 +80,40 @@ class VesselOverlay {
 
   createVesselStyle(feature) {
     const scale = this.calculateRealWorldScale();
-
-    // Create color overlay based on status
     const statusColor =
       this.status === "Connected"
-        ? [0, 255, 0, 0.3] // Green with 0.3 opacity for Connected
-        : [255, 0, 0, 0.3]; // Red with 0.3 opacity for Disconnected
+        ? [0, 255, 0, 0.3] // Green with 0.3 opacity
+        : [255, 0, 0, 0.3]; // Red with 0.3 opacity
 
-    return new ol.style.Style({
-      image: new ol.style.Icon({
-        src: this.imageUrl,
-        scale: scale,
-        rotation: (this.rotationAngle * Math.PI) / 180,
-        anchor: [0.5, 0.5],
-        anchorXUnits: "fraction",
-        anchorYUnits: "fraction",
-        crossOrigin: "anonymous",
-        color: statusColor,
-      }),
-      text: this.createLabel(scale),
-    });
+    if (this.imageLoaded) {
+      return new ol.style.Style({
+        image: new ol.style.Icon({
+          src: this.imageUrl,
+          scale: scale,
+          rotation: (this.rotationAngle * Math.PI) / 180,
+          anchor: [0.5, 0.5],
+          anchorXUnits: "fraction",
+          anchorYUnits: "fraction",
+          color: statusColor,
+        }),
+        text: this.createLabel(scale),
+      });
+    } else {
+      // Fallback to triangle shape if image fails to load
+      return new ol.style.Style({
+        image: new ol.style.RegularShape({
+          points: 3,
+          radius: 10 * scale,
+          rotation: (this.rotationAngle * Math.PI) / 180,
+          fill: new ol.style.Fill({
+            color:
+              this.status === "Connected" ? [0, 255, 0, 1] : [255, 0, 0, 1],
+          }),
+          stroke: new ol.style.Stroke({ color: "#ffffff", width: 2 }),
+        }),
+        text: this.createLabel(scale),
+      });
+    }
   }
 
   createFallbackStyle(feature) {
@@ -132,10 +145,7 @@ class VesselOverlay {
         text: this.device,
         offsetY: -(this.height * scale) / 2 - 10,
         fill: new ol.style.Fill({ color: "#000000" }),
-        stroke: new ol.style.Stroke({
-          color: "#ffffff",
-          width: 3,
-        }),
+        stroke: new ol.style.Stroke({ color: "#ffffff", width: 3 }),
         font: `${fontSize}px sans-serif`,
       });
     }
@@ -195,25 +205,27 @@ class VesselOverlay {
       });
 
       if (hit) {
-        evt.stopPropagation(); // Stop event propagation
-        evt.preventDefault(); // Prevent default double-click zoom
+        evt.stopPropagation();
+        evt.preventDefault();
 
         const feature = this.layer
           .getSource()
           .getClosestFeatureToCoordinate(evt.coordinate);
+
         if (feature === this.feature) {
+          // Update search input if exists
           const searchInput = document.querySelector(".search-input");
           if (searchInput) {
             searchInput.value = this.device;
           }
 
-          const vessel = wsData.navigation[this.device];
-          if (vessel) {
-            detailOverlay.showVesselDetails(vessel);
-          }
+          // Show vessel details using the global vesselDetail instance
+          vesselDetail.showVesselDetails(wsData.navigation[this.device]);
 
+          // Zoom to vessel
           this.zoomToVessel();
 
+          // Create pulse animation
           const element = document.createElement("div");
           element.className = "pulse-animation";
           element.style.cssText = `
@@ -347,10 +359,6 @@ class VesselOverlay {
     if (options.speed) this.speed = options.speed;
     if (options.waterDepth) this.waterDepth = options.waterDepth;
     if (options.gpsQuality) this.gpsQuality = options.gpsQuality;
-    if (options.imageUrl && options.imageUrl !== this.imageUrl) {
-      this.imageUrl = options.imageUrl;
-      this.loadImage();
-    }
 
     this.layer.changed();
   }
@@ -361,11 +369,10 @@ class VesselOverlay {
     }
   }
 }
-
 class AnimatedVesselOverlay extends VesselOverlay {
   constructor(map, options) {
     super(map, options);
-    this.animationDuration = 1000;
+    this.baseAnimationDuration = 1000; // Base duration for 1x speed
     this.currentAnimation = null;
   }
 
@@ -375,11 +382,13 @@ class AnimatedVesselOverlay extends VesselOverlay {
     const startPosition = [...this.position];
     const startRotation = this.rotationAngle;
 
+    // Update static properties
     if (options.status) this.status = options.status;
     if (options.speed) this.speed = options.speed;
     if (options.waterDepth) this.waterDepth = options.waterDepth;
     if (options.gpsQuality) this.gpsQuality = options.gpsQuality;
 
+    // Cancel any ongoing animation
     if (this.currentAnimation) {
       cancelAnimationFrame(this.currentAnimation);
     }
@@ -391,23 +400,24 @@ class AnimatedVesselOverlay extends VesselOverlay {
           ? options.rotationAngle
           : this.rotationAngle;
 
+      // Calculate animation duration based on playback speed
+      const playbackSpeed = options.playbackSpeed || 1;
+      const animationDuration = this.baseAnimationDuration / playbackSpeed;
+
       const startTime = performance.now();
 
       const animate = (currentTime) => {
         const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / this.animationDuration, 1);
-        const eased =
-          progress < 0.5
-            ? 2 * progress * progress
-            : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+        const progress = Math.min(elapsed / animationDuration, 1);
 
+        // Linear interpolation instead of easing for more accurate tracking
         this.position = [
-          startPosition[0] + (endPosition[0] - startPosition[0]) * eased,
-          startPosition[1] + (endPosition[1] - startPosition[1]) * eased,
+          startPosition[0] + (endPosition[0] - startPosition[0]) * progress,
+          startPosition[1] + (endPosition[1] - startPosition[1]) * progress,
         ];
 
         this.rotationAngle =
-          startRotation + (endRotation - startRotation) * eased;
+          startRotation + (endRotation - startRotation) * progress;
 
         this.feature.setGeometry(
           new ol.geom.Point(ol.proj.fromLonLat(this.position))

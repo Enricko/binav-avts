@@ -137,13 +137,25 @@ class SensorOverlay {
     element.addEventListener("dblclick", (evt) => {
       evt.stopPropagation();
       evt.preventDefault();
+
+      // Update search input if exists
       const searchInput = document.querySelector(".search-input");
       if (searchInput) {
         searchInput.value = sensor.websocketKey;
       }
 
-      detailOverlay.showSensorDetails(sensor);
+      // Show sensor details using the global sensorDetail instance
+      sensorDetail.showSensorDetails({
+        id: sensor.websocketKey,
+        types: sensor.types || ["tide"],
+        connection_status: sensor.connection_status,
+        latitude: sensor.latitude,
+        longitude: sensor.longitude,
+        last_update: sensor.last_update,
+        raw_data: sensor.raw_data,
+      });
 
+      // Animate to sensor position
       const coordinate = ol.proj.fromLonLat([
         parseFloat(sensor.longitude),
         parseFloat(sensor.latitude),
@@ -155,18 +167,18 @@ class SensorOverlay {
         duration: 1000,
       });
 
-      // Pulse animation
+      // Create pulse animation
       const pulseElement = document.createElement("div");
       pulseElement.style.cssText = `
-      position: absolute;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: rgba(59, 130, 246, 0.3);
-      animation: pulse 1s ease-out;
-      pointer-events: none;
-      transform: translate(-50%, -50%);
-    `;
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(59, 130, 246, 0.3);
+        animation: pulse 1s ease-out;
+        pointer-events: none;
+        transform: translate(-50%, -50%);
+      `;
 
       const pulseOverlay = new ol.Overlay({
         element: pulseElement,

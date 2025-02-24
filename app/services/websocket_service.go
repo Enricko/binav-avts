@@ -334,7 +334,7 @@ func (ws *WebSocketService) getSensorData() map[string]SensorData {
 			}
 		}
 
-		key := fmt.Sprintf("%s-%s", sensor.ID)
+		key := fmt.Sprintf("%s", sensor.ID)
 		sensorData[key] = SensorData{
 			ID:               sensor.ID,
 			Types:            sensor.Types,
