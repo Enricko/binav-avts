@@ -1,4 +1,3 @@
-
 // Create navigation menu container
 const navContainer = document.createElement("div");
 navContainer.className = "nav-control";
@@ -25,7 +24,7 @@ const navItems = [
   {
     icon: "bi bi-broadcast",
     label: "Sensors",
-    action: () => console.log("Sensors clicked"),
+    action: () => openSensorModal(),
   },
   {
     icon: "bi bi-layers",
@@ -112,6 +111,55 @@ function openVesselModal() {
   bootstrapModal.show();
 }
 
+// Function to open the sensor modal
+function openSensorModal() {
+  // Check if modal already exists
+  let sensorModal = document.getElementById("sensorManagementModal");
+
+  if (!sensorModal) {
+    // Create the modal element
+    sensorModal = document.createElement("div");
+    sensorModal.id = "sensorManagementModal";
+    sensorModal.className = "modal fade";
+    sensorModal.setAttribute("tabindex", "-1");
+    sensorModal.setAttribute("aria-labelledby", "sensorManagementModalLabel");
+    sensorModal.setAttribute("aria-hidden", "true");
+
+    // Set the modal HTML structure
+    sensorModal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="sensorManagementModalLabel">Sensor Management</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-0">
+            <div id="sensorContentContainer">
+              <div class="d-flex justify-content-center p-5">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Append modal to body
+    document.body.appendChild(sensorModal);
+  }
+
+  // Initialize bootstrap modal
+  const bootstrapModal = new bootstrap.Modal(sensorModal);
+
+  // Load content from route
+  loadSensorContent();
+
+  // Show the modal
+  bootstrapModal.show();
+}
+
 // Function to load content from the Kapal index route
 function loadVesselContent() {
   const contentContainer = document.getElementById("vesselContentContainer");
@@ -167,3 +215,67 @@ function loadVesselContent() {
       `;
     });
 }
+
+// Function to load content from the Sensor index route
+function loadSensorContent() {
+  const contentContainer = document.getElementById("sensorContentContainer");
+
+  // Clear existing content and show loading spinner
+  contentContainer.innerHTML = `
+    <div class="d-flex justify-content-center p-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+  `;
+
+  // Fetch the content from the route
+  fetch("/api/sensor/view")
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.text();
+    })
+    .then((html) => {
+      // Insert the HTML content
+      contentContainer.innerHTML = html;
+
+      // Initialize the datatable and other components
+      if (typeof initSensorsDatatable === "function") {
+        initSensorsDatatable();
+      } else {
+        // If the function isn't available directly, it might be loaded from the HTML
+        // or we need to import it from a module
+        import("./../../management/sensor_management.js")
+          .then((module) => {
+            if (typeof module.initSensorsDatatable === "function") {
+              module.initSensorsDatatable();
+            }
+          })
+          .catch((error) => {
+            console.error("Failed to load sensor management script:", error);
+          });
+      }
+    })
+    .catch((error) => {
+      // Show error message
+      contentContainer.innerHTML = `
+        <div class="alert alert-danger m-3">
+          <h5>Failed to load sensor management</h5>
+          <p>${error.message}</p>
+          <button class="btn btn-sm btn-outline-danger" onclick="loadSensorContent()">
+            <i class="bi bi-arrow-clockwise"></i> Retry
+          </button>
+        </div>
+      `;
+    });
+}
+
+// Export functions for use in other modules
+export { 
+  openVesselModal, 
+  openSensorModal, 
+  loadVesselContent, 
+  loadSensorContent 
+};

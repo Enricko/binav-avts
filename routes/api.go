@@ -12,6 +12,7 @@ func Api() {
 	facades.Route().Get("/users/{id}", userController.Show)
 
 	kapalController := controllers.NewKapalController()
+	sensorController := controllers.NewSensorController()
 
 	// Define API route group with middleware
 	facades.Route().Prefix("api").Group(func(router route.Router) {
@@ -34,6 +35,28 @@ func Api() {
 			// })
 		})
 
-		// Add other API routes here
+		
+		// Sensor routes
+		router.Prefix("sensor").Group(func(sensor route.Router) {
+			// Metadata endpoints
+			sensor.Get("/types", sensorController.GetSensorTypes)
+			sensor.Get("/statistics", sensorController.GetStatistics)
+			
+			// Core CRUD operations
+			sensor.Get("/", sensorController.Index)
+			sensor.Get("/view", sensorController.View)
+			sensor.Get("/{id}", sensorController.Show)
+			sensor.Post("/", sensorController.Store)
+			sensor.Post("/{id}", sensorController.Update)
+			sensor.Delete("/{id}", sensorController.Destroy)
+			sensor.Put("/{id}/restore", sensorController.Restore)
+			
+			// Type management endpoints
+			sensor.Post("/{id}/type", sensorController.AddType)      // Add a type to a sensor
+			sensor.Delete("/{id}/type", sensorController.RemoveType) // Remove a type from a sensor
+			
+			// Sensor history streaming endpoint
+			sensor.Get("/history", sensorController.GetHistorySensorStream)
+		})
 	})
 }

@@ -3,8 +3,6 @@ package controllers
 import (
 	"encoding/json"
 	"goravel/app/models"
-	"net/http"
-	"strings"
 	"time"
 
 	nethttp "net/http"
@@ -20,6 +18,12 @@ type SensorController struct {
 // NewSensorController creates a new instance of SensorController
 func NewSensorController() *SensorController {
 	return &SensorController{}
+}
+
+
+func (c *SensorController) View(ctx http.Context) http.Response {
+	// Return the HTML template for the vessel management interface
+	return ctx.Response().View().Make("pages/sensor_modal.html")
 }
 
 // Index returns a paginated list of all sensors
@@ -48,7 +52,8 @@ func (r *SensorController) Index(ctx http.Context) http.Response {
 	if ctx.Request().QueryBool("with_trashed", false) {
 		query = query.WithTrashed()
 	} else if ctx.Request().QueryBool("only_trashed", false) {
-		query = query.OnlyTrashed()
+		// Manually filter for only trashed records since OnlyTrashed is not available
+		query = query.WhereNotNull("deleted_at")
 	}
 	
 	// Execute count query for pagination
@@ -56,7 +61,7 @@ func (r *SensorController) Index(ctx http.Context) http.Response {
 	if ctx.Request().QueryBool("with_trashed", false) {
 		countQuery = countQuery.WithTrashed()
 	} else if ctx.Request().QueryBool("only_trashed", false) {
-		countQuery = countQuery.OnlyTrashed()
+		countQuery = countQuery.WhereNotNull("deleted_at")
 	}
 	countQuery.Count(&total)
 	
@@ -310,7 +315,9 @@ func (r *SensorController) Destroy(ctx http.Context) http.Response {
 		})
 	}
 	
-	if err := facades.Orm().Query().Delete(&sensor); err != nil {
+	// Fix: Properly handle both return values from Delete
+	_, err := facades.Orm().Query().Delete(&sensor)
+	if err != nil {
 		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
 			"message": "Failed to delete sensor",
 			"error":   err.Error(),
@@ -339,7 +346,8 @@ func (r *SensorController) Restore(ctx http.Context) http.Response {
 		})
 	}
 	
-	if err := facades.Orm().Query().Model(&sensor).Update("deleted_at", nil); err != nil {
+	_,err := facades.Orm().Query().Model(&sensor).Update("deleted_at", nil); 
+	if err != nil {
 		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
 			"message": "Failed to restore sensor",
 			"error":   err.Error(),

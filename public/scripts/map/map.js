@@ -1,3 +1,9 @@
+let locationPickingActive = false;
+let locationMarker = null;
+let locationPickerClickListener = null;
+let originalCenter = null;
+let originalZoom = null;
+
 var extent = ol.proj.transformExtent(
   [92.0, -15.0, 143.0, 10.0],
   "EPSG:4326",
