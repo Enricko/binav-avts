@@ -5,10 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"goravel/app/models"
-	// "math"
 	"net/http"
-	// "strconv"
-	// "strings"
 	"sync"
 	"time"
 
@@ -17,6 +14,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// WebSocketService manages real-time data streaming via WebSockets
 type WebSocketService struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -35,6 +33,7 @@ type WebSocketService struct {
 	cacheMutex      sync.RWMutex
 }
 
+// ConnectionStatus returns a string representation of the connection status
 func getStatusString(isActive bool) string {
 	if isActive {
 		return "Connected"
@@ -42,6 +41,7 @@ func getStatusString(isActive bool) string {
 	return "Disconnected"
 }
 
+// VesselData represents vessel information for API response
 type VesselData struct {
 	CallSign                    string  `json:"call_sign"`
 	Flag                        string  `json:"flag"`
@@ -51,7 +51,7 @@ type VesselData struct {
 	HeadingDirection            int64   `json:"heading_direction"`
 	Calibration                 int64   `json:"calibration"`
 	WidthM                      int64   `json:"width_m"`
-	LengthM                      int64   `json:"length_m"`
+	LengthM                     int64   `json:"length_m"`
 	BowToStern                  int64   `json:"bow_to_stern"`
 	PortToStarboard             int64   `json:"port_to_starboard"`
 	VesselMapImage              string  `json:"vessel_map_image"`
@@ -62,6 +62,7 @@ type VesselData struct {
 	RecordStatus                bool    `json:"record_status"`
 }
 
+// TelemetryData represents real-time vessel telemetry
 type TelemetryData struct {
 	CallSign                    string    `json:"call_sign"`
 	Latitude                    string    `json:"latitude"`
@@ -81,12 +82,14 @@ type TelemetryData struct {
 	FuelEfficiencyStatus        string    `json:"fuel_efficiency_status"`
 }
 
+// NavigationData combines vessel and telemetry data
 type NavigationData struct {
 	CallSign  string        `json:"call_sign"`
 	Vessel    VesselData    `json:"vessel"`
 	Telemetry TelemetryData `json:"telemetry"`
 }
 
+// SensorData represents sensor information and status
 type SensorData struct {
 	ID               string     `json:"id"`
 	Types            []string   `json:"types"`
@@ -97,6 +100,7 @@ type SensorData struct {
 	ConnectionStatus string     `json:"connection_status"`
 }
 
+// WebSocketResponse is the main response structure sent to clients
 type WebSocketResponse struct {
 	Navigation map[string]NavigationData `json:"navigation"`
 	Sensors    map[string]SensorData     `json:"sensors"`
@@ -108,6 +112,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// NewWebSocketService creates a new WebSocket service
 func NewWebSocketService(tcpService *TCPVesselService, sensorService *TCPSensorService) *WebSocketService {
 	ctx, cancel := context.WithCancel(context.Background())
 	ws := &WebSocketService{
@@ -129,13 +134,14 @@ func NewWebSocketService(tcpService *TCPVesselService, sensorService *TCPSensorS
 	return ws
 }
 
+// updateCache refreshes the internal cache of vessels and sensors
 func (ws *WebSocketService) updateCache() {
 	ws.cacheMutex.Lock()
 	defer ws.cacheMutex.Unlock()
 
-	// Update kapal cache
+	// Update kapal cache - filter out soft-deleted records
 	var vessels []models.Kapal
-	if err := facades.Orm().Query().Find(&vessels); err == nil {
+	if err := facades.Orm().Query().WhereNull("deleted_at").Find(&vessels); err == nil {
 		newKapalCache := make(map[string]*models.Kapal)
 		for i := range vessels {
 			newKapalCache[vessels[i].CallSign] = &vessels[i]
@@ -157,6 +163,7 @@ func (ws *WebSocketService) updateCache() {
 	ws.sensorCacheTime = time.Now()
 }
 
+// run maintains the WebSocket client connections
 func (ws *WebSocketService) run() {
 	for {
 		select {
@@ -187,6 +194,7 @@ func (ws *WebSocketService) run() {
 	}
 }
 
+// HandleConnection handles a new WebSocket connection
 func (ws *WebSocketService) HandleConnection(c contractshttp.Context) error {
 	responseWriter := c.Response().Writer()
 	request := c.Request().Origin()
@@ -199,6 +207,7 @@ func (ws *WebSocketService) HandleConnection(c contractshttp.Context) error {
 
 	ws.register <- conn
 
+	// Monitor connection for client messages or disconnection
 	for {
 		_, _, err := conn.ReadMessage()
 		if err != nil {
@@ -209,6 +218,8 @@ func (ws *WebSocketService) HandleConnection(c contractshttp.Context) error {
 
 	return nil
 }
+
+// broadcastData periodically sends data to all connected clients
 func (ws *WebSocketService) broadcastData() {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -225,15 +236,12 @@ func (ws *WebSocketService) broadcastData() {
 				Sensors:    ws.getSensorData(),
 			}
 
-			// Broadcast even if one of them has data
-			// if len(response.Navigation) > 0 || len(response.Sensors) > 0 {
 			jsonData, err := json.Marshal(response)
 			if err != nil {
 				facades.Log().Error("JSON marshal error:", err)
 				continue
 			}
 			ws.broadcastToClients(jsonData)
-			// }
 
 		case <-ws.ctx.Done():
 			return
@@ -241,6 +249,7 @@ func (ws *WebSocketService) broadcastData() {
 	}
 }
 
+// getNavigationData collects vessel navigation data
 func (ws *WebSocketService) getNavigationData() map[string]NavigationData {
 	// Check and update cache if needed
 	if time.Since(ws.kapalCacheTime) > time.Minute {
@@ -259,7 +268,7 @@ func (ws *WebSocketService) getNavigationData() map[string]NavigationData {
 	for callSign, buffer := range ws.TCPVesselService.nmeaBuffers {
 		vessel, exists := ws.kapalCache[callSign]
 		if !exists {
-			continue
+			continue // Skip if vessel not found or soft-deleted
 		}
 
 		buffer.mutex.Lock()
@@ -298,6 +307,7 @@ func (ws *WebSocketService) getNavigationData() map[string]NavigationData {
 	return navigationData
 }
 
+// getSensorData collects sensor data
 func (ws *WebSocketService) getSensorData() map[string]SensorData {
 	ws.TCPSensorService.bufferMutex.Lock()
 	defer ws.TCPSensorService.bufferMutex.Unlock()
@@ -334,8 +344,7 @@ func (ws *WebSocketService) getSensorData() map[string]SensorData {
 			}
 		}
 
-		key := fmt.Sprintf("%s", sensor.ID)
-		sensorData[key] = SensorData{
+		sensorData[sensorID] = SensorData{
 			ID:               sensor.ID,
 			Types:            sensor.Types,
 			Latitude:         sensor.Latitude,
@@ -349,17 +358,7 @@ func (ws *WebSocketService) getSensorData() map[string]SensorData {
 	return sensorData
 }
 
-func (ws *WebSocketService) getConnectionStatus(callSign string) string {
-	ws.TCPVesselService.bufferMutex.Lock()
-	defer ws.TCPVesselService.bufferMutex.Unlock()
-
-	_, exists := ws.TCPVesselService.activeVessels[callSign]
-	if exists {
-		return "Connected"
-	}
-	return "Disconnected"
-}
-
+// broadcastToClients sends data to all connected WebSocket clients
 func (ws *WebSocketService) broadcastToClients(data []byte) {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
@@ -373,6 +372,7 @@ func (ws *WebSocketService) broadcastToClients(data []byte) {
 	}
 }
 
+// createVesselData converts a Kapal model to VesselData
 func createVesselData(vessel *models.Kapal) VesselData {
 	return VesselData{
 		CallSign:                    vessel.CallSign,
@@ -383,7 +383,7 @@ func createVesselData(vessel *models.Kapal) VesselData {
 		HeadingDirection:            vessel.HeadingDirection,
 		Calibration:                 vessel.Calibration,
 		WidthM:                      vessel.WidthM,
-		LengthM:                      vessel.LengthM,
+		LengthM:                     vessel.LengthM,
 		BowToStern:                  vessel.BowToStern,
 		PortToStarboard:             vessel.PortToStarboard,
 		VesselMapImage:              vessel.ImageMap,
@@ -395,6 +395,7 @@ func createVesselData(vessel *models.Kapal) VesselData {
 	}
 }
 
+// createTelemetryData creates TelemetryData from a buffer
 func createTelemetryData(buffer *NMEABuffer, vessel *models.Kapal, callSign string, isActive bool,
 	latDec float64, latDMS string, lonDec float64, lonDMS string) TelemetryData {
 
@@ -430,6 +431,7 @@ func createTelemetryData(buffer *NMEABuffer, vessel *models.Kapal, callSign stri
 	}
 }
 
+// createTelemetryDataFromRecord creates TelemetryData from a record
 func createTelemetryDataFromRecord(record *models.VesselRecord, vessel *models.Kapal, isActive bool,
 	latDec float64, latDMS string, lonDec float64, lonDMS string) TelemetryData {
 
@@ -465,6 +467,7 @@ func createTelemetryDataFromRecord(record *models.VesselRecord, vessel *models.K
 	}
 }
 
+// getLastRecord retrieves the most recent record for a vessel
 func getLastRecord(callSign string) *models.VesselRecord {
 	var lastRecord models.VesselRecord
 	err := facades.Orm().Query().
@@ -477,6 +480,7 @@ func getLastRecord(callSign string) *models.VesselRecord {
 	return &lastRecord
 }
 
+// getStatus returns the connection status string
 func getStatus(isActive bool) string {
 	if isActive {
 		return "Connected"

@@ -12,6 +12,7 @@ import (
 	"github.com/goravel/framework/facades"
 )
 
+// TCPVesselService handles TCP connections for vessel data
 type TCPVesselService struct {
 	listener net.Listener
 	mutex    sync.Mutex
@@ -49,6 +50,7 @@ const (
 	checkInterval     = 5 * time.Second  // Check every 5 seconds
 )
 
+// NewTCPVesselService creates a new TCP vessel service
 func NewTCPVesselService() *TCPVesselService {
 	return &TCPVesselService{
 		cache:         make(map[string]*CacheEntry),
@@ -57,6 +59,7 @@ func NewTCPVesselService() *TCPVesselService {
 	}
 }
 
+// trackVessel marks a vessel as active
 func (s *TCPVesselService) trackVessel(kapal *models.Kapal) {
 	s.bufferMutex.Lock()
 	defer s.bufferMutex.Unlock()
@@ -64,6 +67,7 @@ func (s *TCPVesselService) trackVessel(kapal *models.Kapal) {
 	s.activeVessels[kapal.CallSign] = kapal
 }
 
+// Start initializes the TCP server for vessels
 func (s *TCPVesselService) Start() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -110,10 +114,14 @@ func (s *TCPVesselService) Start() error {
 	return nil
 }
 
-// Add this new method
+// markAllVesselsDisconnected sets all vessels to disconnected status
 func (s *TCPVesselService) markAllVesselsDisconnected() {
 	var vessels []models.Kapal
-	err := facades.Orm().Query().Where("record_status = ?", true).Find(&vessels)
+	err := facades.Orm().Query().
+		WhereNull("deleted_at").
+		Where("record_status = ?", true).
+		Find(&vessels)
+
 	if err != nil {
 		facades.Log().Error("Failed to fetch vessels for initial disconnect status:", err)
 		return
@@ -142,6 +150,7 @@ func (s *TCPVesselService) markAllVesselsDisconnected() {
 	facades.Log().Info("✅ Completed initial vessel status check")
 }
 
+// CheckDisconnectedVessels periodically checks for inactive vessels
 func (s *TCPVesselService) CheckDisconnectedVessels() {
 	go func() {
 		ticker := time.NewTicker(checkInterval)
@@ -177,6 +186,7 @@ func (s *TCPVesselService) CheckDisconnectedVessels() {
 	}()
 }
 
+// handleConnection processes a single TCP connection
 func (s *TCPVesselService) handleConnection(conn net.Conn) {
 	defer func() {
 		conn.Close()
@@ -204,6 +214,7 @@ func (s *TCPVesselService) handleConnection(conn net.Conn) {
 	}
 }
 
+// getKapal retrieves a vessel by call sign, with caching
 func (s *TCPVesselService) getKapal(callSign string) (*models.Kapal, error) {
 	if entry, exists := s.cache[callSign]; exists {
 		if time.Since(entry.timestamp) < cacheDuration {
@@ -213,9 +224,20 @@ func (s *TCPVesselService) getKapal(callSign string) (*models.Kapal, error) {
 	}
 
 	kapal := models.Kapal{}
-	err := facades.Orm().Query().Where("call_sign = ?", callSign).FirstOrFail(&kapal)
+	// Add WhereNull("deleted_at") to exclude soft-deleted vessels
+	err := facades.Orm().Query().
+		WhereNull("deleted_at").
+		Where("call_sign = ?", callSign).
+		FirstOrFail(&kapal)
+
 	if err != nil {
-		return nil, err // Return nil and the error
+		// Cache the negative result too, to avoid repeated database queries
+		s.cache[callSign] = &CacheEntry{
+			kapal:     nil,
+			error:     err,
+			timestamp: time.Now(),
+		}
+		return nil, err
 	}
 
 	kapalPtr := &kapal
@@ -228,9 +250,8 @@ func (s *TCPVesselService) getKapal(callSign string) (*models.Kapal, error) {
 	return kapalPtr, nil
 }
 
-// Update handleTCPData to track vessels
+// handleTCPData processes incoming TCP data
 func (s *TCPVesselService) handleTCPData(data string) {
-	// fmt.Println(data)
 	parts := strings.Split(data, ",")
 	if len(parts) < 2 {
 		facades.Log().Error("❌ Invalid data format")
@@ -257,6 +278,7 @@ func (s *TCPVesselService) handleTCPData(data string) {
 	}
 }
 
+// processVesselData handles different types of NMEA data
 func (s *TCPVesselService) processVesselData(kapal models.Kapal, data string) {
 	if len(data) >= 6 {
 		sentenceType := data[3:6]
@@ -273,22 +295,22 @@ func (s *TCPVesselService) processVesselData(kapal models.Kapal, data string) {
 	}
 }
 
-
+// processGGAData handles GGA NMEA sentences (position data)
 func (s *TCPVesselService) processGGAData(kapal models.Kapal, data string) {
 	fields := strings.Split(data, ",")
 	if len(fields) < 15 {
 		facades.Log().Debug(fmt.Sprintf("Invalid GGA sentence, padding with defaults: %s", data))
 		fields = append(fields, make([]string, 15-len(fields))...) // Pad with empty strings
 	}
-	
+
 	buffer := s.getOrCreateBuffer(kapal.CallSign)
 	buffer.mutex.Lock()
 	defer buffer.mutex.Unlock()
-	
+
 	// Default values
 	latitude := "0.0"
 	longitude := "0.0"
-	
+
 	// Parse latitude if available
 	if fields[2] != "" && fields[3] != "" {
 		latDMS, err := strconv.ParseFloat(fields[2], 64)
@@ -298,7 +320,7 @@ func (s *TCPVesselService) processGGAData(kapal models.Kapal, data string) {
 			facades.Log().Debug(fmt.Sprintf("Error parsing latitude, using default 0: %v", err))
 		}
 	}
-	
+
 	// Parse longitude if available
 	if fields[4] != "" && fields[5] != "" {
 		longDMS, err := strconv.ParseFloat(fields[4], 64)
@@ -308,19 +330,19 @@ func (s *TCPVesselService) processGGAData(kapal models.Kapal, data string) {
 			facades.Log().Debug(fmt.Sprintf("Error parsing longitude, using default 0: %v", err))
 		}
 	}
-	
+
 	// Default GPS quality to 0 if field is empty
 	var gpsQuality models.GpsQuality
 	if fields[6] != "" {
 		gpsQuality = getGpsQualityFromIndicator(fields[6])
 	}
-	
+
 	// Update buffer with new GGA data
 	buffer.Latitude = latitude
 	buffer.Longitude = longitude
 	buffer.GpsQualityIndicator = gpsQuality
 	buffer.LastGGATime = time.Now()
-	
+
 	// Check if we should create a record
 	if kapal.RecordStatus && time.Since(buffer.LastRecordTime) >= time.Duration(kapal.HistoryPerSecond)*time.Second {
 		timeSinceVTG := time.Since(buffer.LastVTGTime)
@@ -335,6 +357,7 @@ func (s *TCPVesselService) processGGAData(kapal models.Kapal, data string) {
 	}
 }
 
+// createVesselRecord stores vessel data in the database
 func (s *TCPVesselService) createVesselRecord(callSign string, buffer *NMEABuffer, historyPerSecond int64) {
 	// Only create record if we have the minimum required data
 	if buffer.Latitude == "" || buffer.Longitude == "" {
@@ -344,7 +367,6 @@ func (s *TCPVesselService) createVesselRecord(callSign string, buffer *NMEABuffe
 
 	var lastRecord models.VesselRecord
 	err := facades.Orm().Query().Where("call_sign = ?", callSign).Order("created_at DESC").First(&lastRecord)
-
 
 	newRecord := &models.VesselRecord{
 		CallSign:            callSign,
@@ -373,6 +395,7 @@ func (s *TCPVesselService) createVesselRecord(callSign string, buffer *NMEABuffe
 	}
 }
 
+// processHDTData handles HDT NMEA sentences (heading data)
 func (s *TCPVesselService) processHDTData(kapal models.Kapal, data string) {
 	fields := strings.Split(data, ",")
 	if len(fields) < 3 {
@@ -399,6 +422,7 @@ func (s *TCPVesselService) processHDTData(kapal models.Kapal, data string) {
 	buffer.LastHDTTime = time.Now()
 }
 
+// processVTGData handles VTG NMEA sentences (speed data)
 func (s *TCPVesselService) processVTGData(kapal models.Kapal, data string) {
 	fields := strings.Split(strings.TrimSpace(data), ",")
 	facades.Log().Debug(fmt.Sprintf("Processing VTG data for %s: %v", kapal.CallSign, fields))
@@ -428,6 +452,7 @@ func (s *TCPVesselService) processVTGData(kapal models.Kapal, data string) {
 	facades.Log().Debug(fmt.Sprintf("Updated VTG speed for %s: %.2f knots", kapal.CallSign, speedKnots))
 }
 
+// processDepthData handles depth NMEA sentences (DBT/DPT)
 func (s *TCPVesselService) processDepthData(kapal models.Kapal, data string) {
 	fields := strings.Split(data, ",")
 	if len(fields) < 3 {
@@ -448,6 +473,7 @@ func (s *TCPVesselService) processDepthData(kapal models.Kapal, data string) {
 	buffer.WaterDepth = depth
 }
 
+// updateLastRecordStatus updates the status in the last vessel record
 func (s *TCPVesselService) updateLastRecordStatus(kapal models.Kapal, data string, status models.TelnetStatus) {
 	var lastRecord models.VesselRecord
 	err := facades.Orm().Query().
@@ -472,6 +498,7 @@ func (s *TCPVesselService) updateLastRecordStatus(kapal models.Kapal, data strin
 	}
 }
 
+// getOrCreateBuffer gets or creates a NMEA buffer for a vessel
 func (s *TCPVesselService) getOrCreateBuffer(callSign string) *NMEABuffer {
 	s.bufferMutex.Lock()
 	defer s.bufferMutex.Unlock()
@@ -495,6 +522,7 @@ func (s *TCPVesselService) getOrCreateBuffer(callSign string) *NMEABuffer {
 	return buffer
 }
 
+// Stop gracefully shuts down the TCP server
 func (s *TCPVesselService) Stop() error {
 	s.bufferMutex.Lock()
 	defer s.bufferMutex.Unlock()

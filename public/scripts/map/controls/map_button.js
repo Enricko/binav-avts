@@ -67,53 +67,6 @@ searchInputGroup.appendChild(searchButton);
 searchContainer.appendChild(searchInputGroup);
 searchContainer.appendChild(searchDropdown);
 
-// Create navigation menu container
-const navContainer = document.createElement("div");
-navContainer.className = "nav-control";
-
-// Create burger button
-const burgerButton = document.createElement("button");
-burgerButton.className = "nav-button";
-burgerButton.innerHTML = `
-  <i class="bi bi-list"></i>
-`;
-burgerButton.title = "Navigation Menu";
-
-// Create dropdown menu
-const navDropdown = document.createElement("div");
-navDropdown.className = "nav-dropdown";
-
-// Create navigation items
-const navItems = [
-  { icon: 'fa-solid fa-ship', label: 'Vessels', action: () => console.log('Vessels clicked') },
-  { icon: 'bi bi-broadcast', label: 'Sensors', action: () => console.log('Sensors clicked') },
-  { icon: 'bi bi-layers', label: 'GeoLayer', action: () => console.log('GeoLayer clicked') },
-  { icon: 'bi bi-people', label: 'Users', action: () => console.log('Users clicked') }
-];
-
-// Create list group for nav items
-const listGroup = document.createElement("div");
-listGroup.className = "list-group";
-
-navItems.forEach(item => {
-  const navItem = document.createElement("button");
-  navItem.className = "list-group-item list-group-item-action d-flex align-items-center gap-2";
-  navItem.innerHTML = `
-    <i class="${item.icon}"></i>
-    <span>${item.label}</span>
-  `;
-  navItem.addEventListener('click', (e) => {
-    e.preventDefault();
-    item.action();
-    navDropdown.classList.remove('show');
-  });
-  listGroup.appendChild(navItem);
-});
-
-navDropdown.appendChild(listGroup);
-navContainer.appendChild(burgerButton);
-navContainer.appendChild(navDropdown);
-
 // Add controls to map
 document.querySelector("#map").appendChild(navContainer);
 document.querySelector("#map").appendChild(searchContainer);
@@ -161,18 +114,18 @@ const initMapControls = (map) => {
 };
 
 // Toggle burger menu dropdown
-burgerButton.addEventListener('click', (e) => {
+burgerButton.addEventListener("click", (e) => {
   e.preventDefault();
-  navDropdown.classList.toggle('show');
+  navDropdown.classList.toggle("show");
 });
 
 // Close dropdowns when clicking outside
-document.addEventListener('click', (e) => {
+document.addEventListener("click", (e) => {
   if (!navContainer.contains(e.target)) {
-    navDropdown.classList.remove('show');
+    navDropdown.classList.remove("show");
   }
   if (!searchContainer.contains(e.target)) {
-    searchDropdown.classList.remove('show');
+    searchDropdown.classList.remove("show");
   }
 });
 
@@ -308,7 +261,9 @@ function updateDropdown(searchTerm) {
           <div>${sensor.id}</div>
           <div class="vessel-speed">${sensor.types.join(", ")}</div>
         </div>
-        <span class="item-status ${statusClass}">${sensor.connection_status}</span>
+        <span class="item-status ${statusClass}">${
+        sensor.connection_status
+      }</span>
       `;
 
       item.addEventListener("click", () => {

@@ -1,0 +1,416 @@
+{{ define "pages/vessel_modal.html" }}
+<div class="container-fluid py-3">
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-white d-flex justify-content-end align-items-center py-3">
+            <button id="addVesselBtn" class="btn btn-primary">
+                <i class="fa-solid fa-plus me-1"></i> Add New Vessel
+            </button>
+        </div>
+        <div class="card-body">
+            <!-- Filter controls with improved layout -->
+            <div class="bg-light p-3 rounded mb-4">
+                <div class="row align-items-end g-3">
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Flag</label>
+                        <input type="text" id="filterFlag" class="form-control" placeholder="Filter by flag">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted mb-1">Class</label>
+                        <input type="text" id="filterClass" class="form-control" placeholder="Filter by class">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted mb-1">Status</label>
+                        <select id="filterStatus" class="form-select">
+                            <option value>All Statuses</option>
+                            <option value="true">Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-check form-switch mt-3">
+                            <input class="form-check-input" type="checkbox" id="showDeleted">
+                            <label class="form-check-label" for="showDeleted">Include Deleted</label>
+                        </div>
+                    </div>
+                    <div class="col-md-2 text-end">
+                        <button id="applyFilters" class="btn btn-primary w-100">
+                            <i class="fa-solid fa-filter me-1"></i> Apply Filters
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty state placeholder (shown when no vessels are found) -->
+            <div id="emptyState" class="d-none text-center py-5">
+                <div class="py-5">
+                    <i class="fa-solid fa-ship text-muted" style="font-size: 4rem; opacity: 0.3;"></i>
+                    <h5 class="mt-3 text-muted">No vessels found</h5>
+                    <p class="text-muted">Try changing your filters or add a new vessel</p>
+                    <button class="btn btn-outline-primary mt-2" id="addEmptyStateBtn">
+                        <i class="fa-solid fa-plus me-1"></i> Add Vessel
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading indicator -->
+            <div id="loadingIndicator" class="d-none text-center py-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Loading vessels...</p>
+            </div>
+
+            <!-- Table container with improved styling -->
+            <div id="tableContainer" class="table-responsive">
+                <table id="vesselsTable" class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Call Sign</th>
+                            <th>Flag</th>
+                            <th>Class</th>
+                            <th>Builder</th>
+                            <th>Year Built</th>
+                            <th>Dimensions</th>
+                            <th>Status</th>
+                            <th class="text-end pe-3">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Table data will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Improved pagination controls -->
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <div class="text-muted small" id="pagination-info">
+                    Showing 0 to 0 of 0 entries
+                </div>
+                <nav aria-label="Vessel pagination">
+                    <ul class="pagination pagination-sm mb-0" id="pagination-controls">
+                        <!-- Pagination will be populated dynamically -->
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vessel Modal Form with improved styling -->
+<div class="modal fade" id="vesselModal" tabindex="-1" aria-labelledby="vesselModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light">
+                <h5 class="modal-title" id="vesselModalLabel">Add New Vessel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="vesselForm" enctype="multipart/form-data">
+                    <!-- Form tabs for better organization -->
+                    <ul class="nav nav-tabs mb-4" id="vesselFormTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="basic-tab" data-bs-toggle="tab" data-bs-target="#basic-info" type="button" role="tab"
+                                aria-controls="basic-info" aria-selected="true">
+                                <i class="fa-solid fa-info-circle me-1"></i> Basic Info
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="dimensions-tab" data-bs-toggle="tab" data-bs-target="#dimensions-info" type="button"
+                                role="tab" aria-controls="dimensions-info" aria-selected="false">
+                                <i class="fa-solid fa-ruler-combined me-1"></i> Dimensions
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="performance-tab" data-bs-toggle="tab" data-bs-target="#performance-info" type="button"
+                                role="tab" aria-controls="performance-info" aria-selected="false">
+                                <i class="fa-solid fa-gauge-high me-1"></i> Performance
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="images-tab" data-bs-toggle="tab" data-bs-target="#images-info" type="button" role="tab"
+                                aria-controls="images-info" aria-selected="false">
+                                <i class="fa-solid fa-image me-1"></i> Images
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Tab content -->
+                    <div class="tab-content" id="vesselFormTabContent">
+                        <!-- Basic Information Tab -->
+                        <div class="tab-pane fade show active" id="basic-info" role="tabpanel" aria-labelledby="basic-tab">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="callSign" class="form-label">Call Sign <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="callSign" name="call_sign" required>
+                                    <div class="form-text">Primary identifier, cannot be changed after creation</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="flag" class="form-label">Flag <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="flag" name="flag" list="flagSuggestions"
+                                        placeholder="Enter country flag" required>
+                                    <datalist id="flagSuggestions">
+                                        <!-- Will be populated by JavaScript -->
+                                    </datalist>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="kelas" class="form-label">Class <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="kelas" name="kelas" list="kelasSuggestions"
+                                        placeholder="Enter vessel class" required>
+                                    <datalist id="kelasSuggestions">
+                                        <!-- Will be populated by JavaScript -->
+                                    </datalist>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="builder" class="form-label">Builder <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" id="builder" name="builder" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="yearBuilt" class="form-label">Year Built <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" id="yearBuilt" name="year_built" min="1900" max="2100" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="recordStatus" class="form-label">Status <span class="text-danger">*</span></label>
+                                    <div class="d-flex mt-2">
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="record_status" id="statusActive" value="true" required>
+                                            <label class="form-check-label" for="statusActive">Active</label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="record_status" id="statusInactive" value="false">
+                                            <label class="form-check-label" for="statusInactive">Inactive</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dimensions & Navigation Tab -->
+                        <div class="tab-pane fade" id="dimensions-info" role="tabpanel" aria-labelledby="dimensions-tab">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="lengthM" class="form-label">Length (m) <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="lengthM" name="length_m" step="0.1" required>
+                                        <span class="input-group-text">m</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="widthM" class="form-label">Width (m) <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="widthM" name="width_m" step="0.1" required>
+                                        <span class="input-group-text">m</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="bowToStern" class="form-label">Bow to Stern (m) <span class="text-danger">*</span></label>
+                                    <p style="color: red;">Note : Bow to Stern of the GPS device</p>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="bowToStern" name="bow_to_stern" step="0.1" required>
+                                        <span class="input-group-text">m</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="portToStarboard" class="form-label">Port to Starboard (m) <span class="text-danger">*</span></label>
+                                    <p style="color: red;">Note : Port to Starboard of the GPS device</p>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="portToStarboard" name="port_to_starboard" step="0.1" required>
+                                        <span class="input-group-text">m</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="headingDirection" class="form-label">Heading Direction <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="headingDirection" name="heading_direction" min="0" max="359"
+                                            required>
+                                        <span class="input-group-text">°</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="calibration" class="form-label">Calibration <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" id="calibration" name="calibration" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Performance & Tracking Tab -->
+                        <div class="tab-pane fade" id="performance-info" role="tabpanel" aria-labelledby="performance-tab">
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label for="historyPerSecond" class="form-label">History Per Second <span class="text-danger">*</span></label>
+                                    <input type="number" class="form-control" id="historyPerSecond" name="history_per_second" required>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="minKnotPerLiter" class="form-label">Min. Knot/Liter <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="minKnotPerLiter" name="minimum_knot_per_liter_gasoline"
+                                            step="0.1" required>
+                                        <span class="input-group-text">knots/L</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label for="maxKnotPerLiter" class="form-label">Max. Knot/Liter <span class="text-danger">*</span></label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="maxKnotPerLiter" name="maximum_knot_per_liter_gasoline"
+                                            step="0.1" required>
+                                        <span class="input-group-text">knots/L</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Images Tab -->
+                        <div class="tab-pane fade" id="images-info" role="tabpanel" aria-labelledby="images-tab">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label for="imageFile" class="form-label">Vessel Image <span class="text-danger">*</span></label>
+                                    <input type="file" class="form-control" id="imageFile" name="image_file" accept="image/*">
+                                    <input type="hidden" id="image" name="image">
+                                    <div class="mt-2 text-center bg-light p-3 rounded border" id="imagePreview">
+                                        <i class="fa-solid fa-ship text-muted" style="font-size: 3rem;"></i>
+                                        <p class="small text-muted mt-2">Image preview will appear here</p>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="imageMapFile" class="form-label">Vessel Map Image <span class="text-danger">*</span></label>
+                                    <p style="color: red;">Note : this will appear as marker on map</p>
+                                    <input type="file" class="form-control" id="imageMapFile" name="image_map_file" accept="image/*">
+                                    <input type="hidden" id="imageMap" name="image_map">
+                                    <div class="mt-2 text-center bg-light p-3 rounded border" id="imageMapPreview">
+                                        <i class="fa-solid fa-map text-muted" style="font-size: 3rem;"></i>
+                                        <p class="small text-muted mt-2">Map image preview will appear here</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveVesselBtn">
+                    <i class="fa-solid fa-save me-1"></i> Save Vessel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal - Improved with warning styling -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                    Confirm Delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="text-center mb-3">
+                    <i class="fa-solid fa-trash-can text-danger" style="font-size: 3rem;"></i>
+                </div>
+                <p class="text-center">Are you sure you want to delete this vessel?</p>
+                <p class="text-center text-muted small">This will perform a soft delete and can be restored later.</p>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">
+                    <i class="fa-solid fa-trash-can me-1"></i> Delete Vessel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Restore Confirmation Modal - Improved with success styling -->
+<div class="modal fade" id="restoreConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fa-solid fa-rotate-left me-2"></i>
+                    Confirm Restore
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="text-center mb-3">
+                    <i class="fa-solid fa-ship text-success" style="font-size: 3rem;"></i>
+                </div>
+                <p class="text-center">Are you sure you want to restore this vessel?</p>
+                <p class="text-center text-muted small">This will make the vessel available again in the system.</p>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="confirmRestoreBtn">
+                    <i class="fa-solid fa-rotate-left me-1"></i> Restore Vessel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vessel Details Modal - Improved with detailed layout -->
+<div class="modal fade" id="vesselDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fa-solid fa-ship me-2"></i>
+                    Vessel Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0" id="vesselDetailsContent">
+                <!-- Loading placeholder for vessel details -->
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Loading vessel details...</p>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container for notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="vesselToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+            <i class="fa-solid fa-info-circle me-2 text-primary"></i>
+            <strong class="me-auto" id="toastTitle">Notification</strong>
+            <small id="toastTime">Just now</small>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="toastMessage">
+            Operation completed successfully.
+        </div>
+    </div>
+</div>
+
+<!-- Alert Modal - Improved with contextual styling -->
+<div class="modal fade" id="alertModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header" id="alertModalHeader">
+                <h5 class="modal-title" id="alertModalTitle">Alert</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" id="alertModalBody">
+                <!-- Alert message will be populated by JavaScript -->
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include the JavaScript module for vessel management functionality -->
+<script type="module" src="./../../../public/scripts/management/kapal_management.js"></script>
+{{ end }}

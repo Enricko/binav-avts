@@ -7,7 +7,7 @@ class VesselOverlay {
     this.rotationAngle = options.rotationAngle || 0;
     this.status = options.status || "Unknown";
     this.device = options.device;
-    this.imageUrl = options.imageUrl || "/storage/vessel_map/default.png"; // Set default path
+    this.imageUrl = `${options.imageUrl}` || "/storage/vessel_map/default.png"; // Set default path
     this.speed = options.speed;
     this.waterDepth = options.waterDepth;
     this.gpsQuality = options.gpsQuality;

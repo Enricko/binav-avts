@@ -38,7 +38,7 @@ class MeasurementTool {
 
   createHistoryModal() {
     const modalHtml = `
-      <div class="modal fade" id="measurementHistoryModal" tabindex="-1" aria-hidden="true">
+      <div class="modal left fade" id="measurementHistoryModal" tabindex="-1" aria-hidden="true">
           <div class="modal-dialog modal-measure">
               <div class="modal-content">
                   <div class="modal-header bg-dark text-white py-2">

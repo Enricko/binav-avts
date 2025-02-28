@@ -1,7 +1,52 @@
 #map {
-    height: 100%;
-    width: 100%;
-    position: absolute;
-    top: 0;
-    left: 0;
+  height: 100%;
+  width: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+.modal.left {
+  position: fixed;
+  z-index: 1050;
+  left: 0;
+  top: 0;
+}
+
+.modal.left .modal-dialog {
+  position: fixed;
+  margin: 0;
+  width: 320px;
+  transform: translate3d(0%, 0, 0);
+}
+
+.modal.left .modal-content {
+  height: 100%;
+  overflow-y: auto;
+  border-radius: 0;
+}
+
+/* Animation */
+.modal.left.fade .modal-dialog {
+  left: -320px;
+  transition: left 0.3s ease-out;
+}
+
+.modal.left.fade.show .modal-dialog {
+  left: 0;
+}
+
+/* Custom modal backdrop with opacity 0.4 */
+.modal-backdrop {
+  background-color: #000;
+  opacity: 0.4 !important;
+}
+
+/* Ensure modals have proper z-index to appear above backdrop */
+.modal {
+  z-index: 1050;
+}
+
+/* Additional styles for better modal appearance with darker backdrop */
+.modal-content {
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/goravel/framework/facades"
 )
 
+// SensorBuffer holds current sensor data
 type SensorBuffer struct {
 	RawData        string
 	LastUpdateTime time.Time
@@ -19,6 +20,7 @@ type SensorBuffer struct {
 	mutex          sync.Mutex
 }
 
+// TCPSensorService handles TCP connections for sensor data
 type TCPSensorService struct {
 	listener          net.Listener
 	bufferMutex       sync.Mutex
@@ -29,6 +31,7 @@ type TCPSensorService struct {
 	connMutex         sync.Mutex
 }
 
+// NewTCPSensorService creates a new TCP sensor service
 func NewTCPSensorService() *TCPSensorService {
 	return &TCPSensorService{
 		sensorBuffers: make(map[string]*SensorBuffer),
@@ -36,16 +39,19 @@ func NewTCPSensorService() *TCPSensorService {
 	}
 }
 
+// GetSensorBuffers returns the current sensor buffers
 func (s *TCPSensorService) GetSensorBuffers() map[string]*SensorBuffer {
 	s.bufferMutex.Lock()
 	defer s.bufferMutex.Unlock()
 	return s.sensorBuffers
 }
 
+// GetBufferMutex returns the buffer mutex
 func (s *TCPSensorService) GetBufferMutex() *sync.Mutex {
 	return &s.bufferMutex
 }
 
+// Start initializes the TCP sensor server
 func (s *TCPSensorService) Start() error {
 	host := facades.Config().GetString("tcp.sensor.host", "0.0.0.0")
 	port := facades.Config().GetString("tcp.sensor.port", "8085")
@@ -65,6 +71,7 @@ func (s *TCPSensorService) Start() error {
 	return nil
 }
 
+// handleConnections accepts and processes incoming connections
 func (s *TCPSensorService) handleConnections() {
 	for {
 		conn, err := s.listener.Accept()
@@ -83,6 +90,7 @@ func (s *TCPSensorService) handleConnections() {
 	}
 }
 
+// handleConnection processes a single TCP connection
 func (s *TCPSensorService) handleConnection(conn net.Conn) {
 	s.incrementConnections()
 	defer func() {
@@ -116,21 +124,24 @@ func (s *TCPSensorService) handleConnection(conn net.Conn) {
 	}
 }
 
+// incrementConnections increases the active connection count
 func (s *TCPSensorService) incrementConnections() {
 	s.connMutex.Lock()
 	defer s.connMutex.Unlock()
 	s.activeConnections++
 }
 
+// decrementConnections decreases the active connection count
 func (s *TCPSensorService) decrementConnections() {
 	s.connMutex.Lock()
 	defer s.connMutex.Unlock()
 	s.activeConnections--
 	if s.activeConnections == 0 {
-		s.Stop()
+		s.ConnectionStatus = false
 	}
 }
 
+// processMessage handles an incoming sensor message
 func (s *TCPSensorService) processMessage(msg string) {
 	re := regexp.MustCompile(`ID:(\d+)`)
 	matches := re.FindStringSubmatch(msg)
@@ -143,6 +154,7 @@ func (s *TCPSensorService) processMessage(msg string) {
 	sensorID := matches[1]
 
 	var sensor models.Sensor
+	// We should apply the soft-delete filter here if the Sensor model uses soft deletes
 	err := facades.Orm().Query().Where("id = ?", sensorID).FirstOrFail(&sensor)
 	if err != nil {
 		facades.Log().Error(fmt.Sprintf("Sensor not found: %s", sensorID))
@@ -173,6 +185,7 @@ func (s *TCPSensorService) processMessage(msg string) {
 	}
 }
 
+// getOrCreateBuffer gets or creates a buffer for a sensor
 func (s *TCPSensorService) getOrCreateBuffer(sensorID string) *SensorBuffer {
 	s.bufferMutex.Lock()
 	defer s.bufferMutex.Unlock()
@@ -191,6 +204,7 @@ func (s *TCPSensorService) getOrCreateBuffer(sensorID string) *SensorBuffer {
 	return buffer
 }
 
+// Stop gracefully shuts down the TCP sensor server
 func (s *TCPSensorService) Stop() error {
 	if s.listener != nil {
 		s.ConnectionStatus = false // Update status on stop

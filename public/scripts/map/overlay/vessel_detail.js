@@ -146,7 +146,7 @@ class VesselDetail extends BaseDetail {
         status: vessel.telemetry.telnet_status,
         rotationAngle: vessel.telemetry.heading_degree,
         speed: vessel.telemetry.speed_in_knots,
-        imageUrl: vessel.vessel.vessel_map_image, // Use vessel map image
+        imageUrl: "storage/"+vessel.vessel.vessel_map_image, // Use vessel map image
       });
     }
 
