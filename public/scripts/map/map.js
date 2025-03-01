@@ -1,8 +1,12 @@
 let locationPickingActive = false;
 let locationMarker = null;
 let locationPickerClickListener = null;
+let markerLayer = null; 
+
 let originalCenter = null;
 let originalZoom = null;
+let sensorModalInstance = null;
+let sensorManagementModalInstance = null;
 
 var extent = ol.proj.transformExtent(
   [92.0, -15.0, 143.0, 10.0],

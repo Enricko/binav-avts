@@ -96,7 +96,6 @@ export function initSensorsDatatable() {
         '<tr><td colspan="6" class="text-center"><div class="spinner-border text-primary" role="status"></div></td></tr>';
 
       // Get filter values
-      const sensorId = document.getElementById("filterSensorId").value;
       const type = document.getElementById("filterType").value;
       const withTrashed = document.getElementById("showDeleted").checked;
 
@@ -108,7 +107,6 @@ export function initSensorsDatatable() {
       };
 
       // Add filters if selected
-      if (sensorId) params.id = sensorId;
       if (type) params.type = type;
 
       // Fetch data
@@ -311,15 +309,6 @@ export function initSensorsDatatable() {
       loadSensors();
     });
 
-    // Filter input keypress events
-    document
-      .getElementById("filterSensorId")
-      .addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
-          document.getElementById("applyFilters").click();
-        }
-      });
-
     // Show deleted checkbox change
     document.getElementById("showDeleted").addEventListener("change", () => {
       currentPage = 1; // Reset to first page when toggling deleted
@@ -421,6 +410,22 @@ export function initSensorsDatatable() {
 
   // Show location picker using the main map
   function showLocationPicker() {
+    // Store references to both modals before hiding them
+    sensorModalInstance = bootstrap.Modal.getInstance(
+      document.getElementById("sensorModal")
+    );
+    sensorManagementModalInstance = bootstrap.Modal.getInstance(
+      document.getElementById("sensorManagementModal")
+    );
+
+    // Hide both modals to allow map interaction
+    if (sensorModalInstance) {
+      sensorModalInstance.hide();
+    }
+
+    if (sensorManagementModalInstance) {
+      sensorManagementModalInstance.hide();
+    }
     // Get current coordinates
     const latitude = document.getElementById("latitude").value || "-1.219515";
     const longitude =
@@ -572,7 +577,7 @@ export function initSensorsDatatable() {
       markerFeature.setStyle(markerStyle);
 
       // Create vector layer for the marker
-      const markerLayer = new ol.layer.Vector({
+      markerLayer = new ol.layer.Vector({
         source: new ol.source.Vector({
           features: [markerFeature],
         }),
@@ -638,6 +643,7 @@ export function initSensorsDatatable() {
 
   // Cancel location picking
   function cancelLocationPicker() {
+    // This will now properly remove the marker
     cleanupLocationPicker();
 
     // Restore original map state
@@ -648,6 +654,17 @@ export function initSensorsDatatable() {
         duration: 500,
       });
     }
+
+    // Restore modals in the correct order
+    if (sensorManagementModalInstance) {
+      sensorManagementModalInstance.show();
+    }
+
+    setTimeout(() => {
+      if (sensorModalInstance) {
+        sensorModalInstance.show();
+      }
+    }, 50);
   }
 
   // Confirm location selection
@@ -659,7 +676,7 @@ export function initSensorsDatatable() {
     document.getElementById("latitude").value = latitude;
     document.getElementById("longitude").value = longitude;
 
-    // Clean up
+    // Clean up (this will now properly remove the marker)
     cleanupLocationPicker();
 
     // Show success message
@@ -668,6 +685,17 @@ export function initSensorsDatatable() {
       "Sensor location has been updated",
       "success"
     );
+
+    // Restore modals in the correct order
+    if (sensorManagementModalInstance) {
+      sensorManagementModalInstance.show();
+    }
+
+    setTimeout(() => {
+      if (sensorModalInstance) {
+        sensorModalInstance.show();
+      }
+    }, 50);
   }
 
   // Clean up picker resources
@@ -684,17 +712,14 @@ export function initSensorsDatatable() {
       locationPickerClickListener = null;
     }
 
-    // Remove marker layer
-    if (locationMarker) {
-      const source = locationMarker.getGeometry().getSource;
-      if (source) {
-        const layer = source.layer;
-        if (layer) {
-          window.map.removeLayer(layer);
-        }
-      }
-      // Don't set to null so we can reuse it
+    // Remove marker layer properly
+    if (markerLayer) {
+      window.map.removeLayer(markerLayer);
+      markerLayer = null;
     }
+
+    // Reset the marker reference
+    locationMarker = null;
 
     // Remove crosshair cursor
     document.getElementById("map").classList.remove("location-picker-active");
@@ -760,7 +785,8 @@ export function initSensorsDatatable() {
         '<option value="">Select a type to add...</option>';
 
       // Add options for types that aren't already assigned
-      const allTypes = ["tide", "weather", "water", "pollution", "current"];
+      // const allTypes = ["tide", "weather", "water", "pollution", "current"];
+      const allTypes = ["tide"];
       const existingTypes = sensor.types.map((t) => t.toLowerCase());
 
       allTypes.forEach((type) => {
@@ -1253,7 +1279,7 @@ export function initSensorsDatatable() {
     }, 2000);
   }
 
-  // Save sensor (create or update)
+  // Add this to your code to better handle saving sensors
   async function saveSensor() {
     try {
       // Validate form
@@ -1261,8 +1287,11 @@ export function initSensorsDatatable() {
         return;
       }
 
-      // Get form values
-      const sensorId = document.getElementById("sensorId").value;
+      // Get form values and trim whitespace from the sensor ID
+      const sensorId = document.getElementById("sensorId").value.trim();
+
+      // Update the input value with the trimmed version
+      document.getElementById("sensorId").value = sensorId;
 
       // Get selected types
       const types = [];
@@ -1281,6 +1310,9 @@ export function initSensorsDatatable() {
         longitude: longitude,
       };
 
+      // Log the data being sent (for debugging)
+      console.log("Sending sensor data:", JSON.stringify(sensorData));
+
       // Save sensor
       if (isEditMode) {
         // Update existing sensor
@@ -1288,8 +1320,18 @@ export function initSensorsDatatable() {
         showToast("Success", "Sensor updated successfully", "success");
       } else {
         // Create new sensor
-        await sensorModel.createSensor(sensorData);
-        showToast("Success", "Sensor created successfully", "success");
+        try {
+          await sensorModel.createSensor(sensorData);
+          showToast("Success", "Sensor created successfully", "success");
+        } catch (createError) {
+          // Enhanced error handling for create operation
+          if (createError.message.includes("Sensor ID already exists")) {
+            handleSensorIdError();
+          } else {
+            throw createError; // Re-throw for the outer catch block
+          }
+          return; // Stop execution if there was an error
+        }
       }
 
       // Hide the modal
@@ -1301,8 +1343,36 @@ export function initSensorsDatatable() {
       // Reload the sensor list
       await loadSensors();
     } catch (error) {
-      showAlert("Error", `Failed to save sensor: ${error.message}`);
+      console.error("Full error details:", error);
+
+      // Better error display
+      if (error.message.includes("Sensor ID already exists")) {
+        handleSensorIdError();
+      } else {
+        showAlert("Error", `Failed to save sensor: ${error.message}`);
+      }
     }
+  }
+
+  // Separate function to handle ID error consistently
+  function handleSensorIdError() {
+    document.getElementById("sensorId").classList.add("is-invalid");
+
+    // Add or update the feedback element
+    let feedbackEl = document.querySelector("#sensorId + .invalid-feedback");
+    if (!feedbackEl) {
+      feedbackEl = document.createElement("div");
+      feedbackEl.className = "invalid-feedback";
+      document.getElementById("sensorId").parentNode.appendChild(feedbackEl);
+    }
+    feedbackEl.textContent =
+      "This sensor ID is already taken or is invalid. Please try a different format.";
+
+    showToast(
+      "Warning",
+      "Sensor ID issue. Please use a different ID format.",
+      "warning"
+    );
   }
 
   // Validate form inputs

@@ -5,9 +5,9 @@ import (
 	"goravel/app/models"
 	"time"
 
-	nethttp "net/http"
 	"github.com/goravel/framework/contracts/http"
 	"github.com/goravel/framework/facades"
+	nethttp "net/http"
 )
 
 // SensorController handles CRUD operations for sensor data
@@ -20,7 +20,6 @@ func NewSensorController() *SensorController {
 	return &SensorController{}
 }
 
-
 func (c *SensorController) View(ctx http.Context) http.Response {
 	// Return the HTML template for the vessel management interface
 	return ctx.Response().View().Make("pages/sensor_modal.html")
@@ -28,90 +27,101 @@ func (c *SensorController) View(ctx http.Context) http.Response {
 
 // Index returns a paginated list of all sensors
 func (r *SensorController) Index(ctx http.Context) http.Response {
-	page := ctx.Request().QueryInt("page", 1)
-	perPage := ctx.Request().QueryInt("per_page", 10)
-	
-	var sensors []models.Sensor
-	var total int64
-	
-	// Build query with search and filter options
-	query := facades.Orm().Query().Model(&models.Sensor{})
-	
-	// Apply search if provided
-	if search := ctx.Request().Query("search", ""); search != "" {
-		query = query.Where("id LIKE ?", "%"+search+"%")
-	}
-	
-	// Apply type filter if provided
-	if sensorType := ctx.Request().Query("type", ""); sensorType != "" {
-		// This JSON contains filtering depends on the database
-		query = query.Where("JSON_CONTAINS(types, ?)", `"`+sensorType+`"`)
-	}
-	
-	// Handle soft deletes
-	if ctx.Request().QueryBool("with_trashed", false) {
-		query = query.WithTrashed()
-	} else if ctx.Request().QueryBool("only_trashed", false) {
-		// Manually filter for only trashed records since OnlyTrashed is not available
-		query = query.WhereNotNull("deleted_at")
-	}
-	
-	// Execute count query for pagination
-	countQuery := facades.Orm().Query().Model(&models.Sensor{})
-	if ctx.Request().QueryBool("with_trashed", false) {
-		countQuery = countQuery.WithTrashed()
-	} else if ctx.Request().QueryBool("only_trashed", false) {
-		countQuery = countQuery.WhereNotNull("deleted_at")
-	}
-	countQuery.Count(&total)
-	
-	// Execute paginated query
-	err := query.Order("created_at DESC").
-		Offset((page - 1) * perPage).
-		Limit(perPage).
-		Find(&sensors)
-		
-	if err != nil {
-		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
-			"message": "Failed to retrieve sensors",
-			"error":   err.Error(),
-		})
-	}
-	
-	return ctx.Response().Json(http.StatusOK, map[string]interface{}{
-		"data": sensors,
-		"meta": map[string]interface{}{
-			"current_page": page,
-			"per_page":     perPage,
-			"total":        total,
-			"last_page":    (total + int64(perPage) - 1) / int64(perPage),
-		},
-		"supported_types": models.GetSupportedTypes(),
-	})
+    page := ctx.Request().QueryInt("page", 1)
+    perPage := ctx.Request().QueryInt("per_page", 10)
+
+    var sensors []models.Sensor
+    var total int64
+
+    // Build query with search and filter options
+    query := facades.Orm().Query().Model(&models.Sensor{})
+
+    // Apply search if provided
+    if search := ctx.Request().Query("search", ""); search != "" {
+        query = query.Where("id LIKE ?", "%"+search+"%")
+    }
+
+    // Apply type filter if provided
+    if sensorType := ctx.Request().Query("type", ""); sensorType != "" {
+        // This JSON contains filtering depends on the database
+        query = query.Where("JSON_CONTAINS(types, ?)", `"`+sensorType+`"`)
+    }
+
+    // Handle soft deletes
+    withTrashed := ctx.Request().QueryBool("with_trashed", false)
+    onlyTrashed := ctx.Request().QueryBool("only_trashed", false)
+    
+    if withTrashed {
+        query = query.WithTrashed()
+    } else if onlyTrashed {
+        query = query.WhereNotNull("deleted_at")
+    } else {
+        // IMPORTANT: Explicitly filter out deleted records when not showing trashed
+        query = query.WhereNull("deleted_at")
+    }
+
+    // Execute count query for pagination
+    countQuery := facades.Orm().Query().Model(&models.Sensor{})
+    
+    // Apply the same filters to the count query
+    if withTrashed {
+        countQuery = countQuery.WithTrashed()
+    } else if onlyTrashed {
+        countQuery = countQuery.WhereNotNull("deleted_at")
+    } else {
+        // IMPORTANT: Apply the same filter to count query
+        countQuery = countQuery.WhereNull("deleted_at")
+    }
+    
+    countQuery.Count(&total)
+    
+    // Execute paginated query
+    err := query.Order("created_at DESC").
+        Offset((page - 1) * perPage).
+        Limit(perPage).
+        Find(&sensors)
+        
+    if err != nil {
+        return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
+            "message": "Failed to retrieve sensors",
+            "error":   err.Error(),
+        })
+    }
+    
+    return ctx.Response().Json(http.StatusOK, map[string]interface{}{
+        "data": sensors,
+        "meta": map[string]interface{}{
+            "current_page": page,
+            "per_page":     perPage,
+            "total":        total,
+            "last_page":    (total + int64(perPage) - 1) / int64(perPage),
+        },
+        "supported_types": models.GetSupportedTypes(),
+    })
 }
 
 // Show retrieves a specific sensor by ID
 func (r *SensorController) Show(ctx http.Context) http.Response {
 	id := ctx.Request().Route("id")
-	
+
 	var sensor models.Sensor
-	
+
 	query := facades.Orm().Query()
-	
+
 	// Check if we should include trashed items
 	if ctx.Request().QueryBool("with_trashed", false) {
 		query = query.WithTrashed()
 	}
-	
+
 	err := query.Find(&sensor, id)
 	if err != nil {
 		return ctx.Response().Json(http.StatusNotFound, map[string]interface{}{
 			"message": "Sensor not found",
 		})
 	}
-	
+
 	return ctx.Response().Json(http.StatusOK, map[string]interface{}{
-		"data": sensor,
+		"data":            sensor,
 		"supported_types": models.GetSupportedTypes(),
 	})
 }
@@ -133,10 +143,17 @@ func (r *SensorController) Store(ctx http.Context) http.Response {
 			"errors":  err.Error(),
 		})
 	}
-	
-	// Validate ID uniqueness
-	var existingSensor models.Sensor
-	if err := facades.Orm().Query().WithTrashed().Where("id = ?", request.ID).First(&existingSensor); err == nil {
+
+	// Validate ID uniqueness using count approach
+	var existingCount int64
+	if err := facades.Orm().Query().Model(&models.Sensor{}).WithTrashed().Where("id = ?", request.ID).Count(&existingCount); err != nil {
+		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
+			"message": "Failed to check for existing sensor",
+			"error":   err.Error(),
+		})
+	}
+
+	if existingCount > 0 {
 		return ctx.Response().Json(http.StatusBadRequest, map[string]interface{}{
 			"message": "Sensor ID already exists",
 			"errors": map[string]interface{}{
@@ -144,7 +161,7 @@ func (r *SensorController) Store(ctx http.Context) http.Response {
 			},
 		})
 	}
-	
+
 	// Create new sensor
 	sensor := models.Sensor{
 		ID:        request.ID,
@@ -152,7 +169,7 @@ func (r *SensorController) Store(ctx http.Context) http.Response {
 		Latitude:  request.Latitude,
 		Longitude: request.Longitude,
 	}
-	
+
 	// Validate sensor data
 	if err := sensor.Validate(); err != nil {
 		return ctx.Response().Json(http.StatusBadRequest, map[string]interface{}{
@@ -163,14 +180,14 @@ func (r *SensorController) Store(ctx http.Context) http.Response {
 			"supported_types": models.GetSupportedTypes(),
 		})
 	}
-	
+
 	if err := facades.Orm().Query().Create(&sensor); err != nil {
 		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
 			"message": "Failed to create sensor",
 			"error":   err.Error(),
 		})
 	}
-	
+
 	return ctx.Response().Json(http.StatusCreated, map[string]interface{}{
 		"message": "Sensor created successfully",
 		"data":    sensor,
@@ -180,7 +197,7 @@ func (r *SensorController) Store(ctx http.Context) http.Response {
 // Update modifies an existing sensor
 func (r *SensorController) Update(ctx http.Context) http.Response {
 	id := ctx.Request().Route("id")
-	
+
 	var request SensorRequest
 	if err := ctx.Request().Bind(&request); err != nil {
 		return ctx.Response().Json(http.StatusBadRequest, map[string]interface{}{
@@ -188,7 +205,7 @@ func (r *SensorController) Update(ctx http.Context) http.Response {
 			"errors":  err.Error(),
 		})
 	}
-	
+
 	// Find existing sensor
 	var sensor models.Sensor
 	if err := facades.Orm().Query().Find(&sensor, id); err != nil {
@@ -196,12 +213,12 @@ func (r *SensorController) Update(ctx http.Context) http.Response {
 			"message": "Sensor not found",
 		})
 	}
-	
+
 	// Update sensor fields
 	sensor.Types = request.Types
 	sensor.Latitude = request.Latitude
 	sensor.Longitude = request.Longitude
-	
+
 	// Validate updated sensor data
 	if err := sensor.Validate(); err != nil {
 		return ctx.Response().Json(http.StatusBadRequest, map[string]interface{}{
@@ -212,14 +229,14 @@ func (r *SensorController) Update(ctx http.Context) http.Response {
 			"supported_types": models.GetSupportedTypes(),
 		})
 	}
-	
+
 	if err := facades.Orm().Query().Save(&sensor); err != nil {
 		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
 			"message": "Failed to update sensor",
 			"error":   err.Error(),
 		})
 	}
-	
+
 	return ctx.Response().Json(http.StatusOK, map[string]interface{}{
 		"message": "Sensor updated successfully",
 		"data":    sensor,
@@ -230,34 +247,34 @@ func (r *SensorController) Update(ctx http.Context) http.Response {
 func (r *SensorController) AddType(ctx http.Context) http.Response {
 	id := ctx.Request().Route("id")
 	sensorType := ctx.Request().Input("type", "")
-	
+
 	if sensorType == "" {
 		return ctx.Response().Json(http.StatusBadRequest, map[string]interface{}{
 			"message": "Type parameter is required",
 		})
 	}
-	
+
 	var sensor models.Sensor
 	if err := facades.Orm().Query().Find(&sensor, id); err != nil {
 		return ctx.Response().Json(http.StatusNotFound, map[string]interface{}{
 			"message": "Sensor not found",
 		})
 	}
-	
+
 	if err := sensor.AddType(sensorType); err != nil {
 		return ctx.Response().Json(http.StatusBadRequest, map[string]interface{}{
-			"message": err.Error(),
+			"message":         err.Error(),
 			"supported_types": models.GetSupportedTypes(),
 		})
 	}
-	
+
 	if err := facades.Orm().Query().Save(&sensor); err != nil {
 		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
 			"message": "Failed to update sensor",
 			"error":   err.Error(),
 		})
 	}
-	
+
 	return ctx.Response().Json(http.StatusOK, map[string]interface{}{
 		"message": "Sensor type added successfully",
 		"data":    sensor,
@@ -268,36 +285,36 @@ func (r *SensorController) AddType(ctx http.Context) http.Response {
 func (r *SensorController) RemoveType(ctx http.Context) http.Response {
 	id := ctx.Request().Route("id")
 	sensorType := ctx.Request().Input("type", "")
-	
+
 	if sensorType == "" {
 		return ctx.Response().Json(http.StatusBadRequest, map[string]interface{}{
 			"message": "Type parameter is required",
 		})
 	}
-	
+
 	var sensor models.Sensor
 	if err := facades.Orm().Query().Find(&sensor, id); err != nil {
 		return ctx.Response().Json(http.StatusNotFound, map[string]interface{}{
 			"message": "Sensor not found",
 		})
 	}
-	
+
 	// Make sure the sensor will have at least one type after removal
 	if len(sensor.Types) <= 1 && sensor.HasType(sensorType) {
 		return ctx.Response().Json(http.StatusBadRequest, map[string]interface{}{
 			"message": "Cannot remove the only type from a sensor",
 		})
 	}
-	
+
 	sensor.RemoveType(sensorType)
-	
+
 	if err := facades.Orm().Query().Save(&sensor); err != nil {
 		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
 			"message": "Failed to update sensor",
 			"error":   err.Error(),
 		})
 	}
-	
+
 	return ctx.Response().Json(http.StatusOK, map[string]interface{}{
 		"message": "Sensor type removed successfully",
 		"data":    sensor,
@@ -307,23 +324,24 @@ func (r *SensorController) RemoveType(ctx http.Context) http.Response {
 // Destroy soft-deletes a sensor
 func (r *SensorController) Destroy(ctx http.Context) http.Response {
 	id := ctx.Request().Route("id")
-	
+
 	var sensor models.Sensor
 	if err := facades.Orm().Query().Find(&sensor, id); err != nil {
 		return ctx.Response().Json(http.StatusNotFound, map[string]interface{}{
 			"message": "Sensor not found",
 		})
 	}
-	
-	// Fix: Properly handle both return values from Delete
-	_, err := facades.Orm().Query().Delete(&sensor)
+
+	// Instead of Delete, explicitly set the deleted_at field for soft deletion
+	now := time.Now()
+	_, err := facades.Orm().Query().Model(&sensor).Update("deleted_at", now)
 	if err != nil {
 		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
 			"message": "Failed to delete sensor",
 			"error":   err.Error(),
 		})
 	}
-	
+
 	return ctx.Response().Json(http.StatusOK, map[string]interface{}{
 		"message": "Sensor deleted successfully",
 	})
@@ -332,28 +350,28 @@ func (r *SensorController) Destroy(ctx http.Context) http.Response {
 // Restore recovers a soft-deleted sensor
 func (r *SensorController) Restore(ctx http.Context) http.Response {
 	id := ctx.Request().Route("id")
-	
+
 	var sensor models.Sensor
 	if err := facades.Orm().Query().WithTrashed().Find(&sensor, id); err != nil {
 		return ctx.Response().Json(http.StatusNotFound, map[string]interface{}{
 			"message": "Sensor not found",
 		})
 	}
-	
+
 	if sensor.DeletedAt == nil {
 		return ctx.Response().Json(http.StatusBadRequest, map[string]interface{}{
 			"message": "Sensor is not deleted",
 		})
 	}
-	
-	_,err := facades.Orm().Query().Model(&sensor).Update("deleted_at", nil); 
+
+	_, err := facades.Orm().Query().Model(&sensor).Update("deleted_at", nil)
 	if err != nil {
 		return ctx.Response().Json(http.StatusInternalServerError, map[string]interface{}{
 			"message": "Failed to restore sensor",
 			"error":   err.Error(),
 		})
 	}
-	
+
 	return ctx.Response().Json(http.StatusOK, map[string]interface{}{
 		"message": "Sensor restored successfully",
 		"data":    sensor,
@@ -478,7 +496,7 @@ func (r *SensorController) GetStatistics(ctx http.Context) http.Response {
 	// Count total sensors
 	var totalSensors int64
 	facades.Orm().Query().Model(&models.Sensor{}).Count(&totalSensors)
-	
+
 	// Count active sensors (those that have records in the last 24 hours)
 	var activeSensors int64
 	facades.Orm().Query().Raw(`
@@ -488,11 +506,11 @@ func (r *SensorController) GetStatistics(ctx http.Context) http.Response {
 		WHERE sr.created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
 		AND s.deleted_at IS NULL
 	`).Scan(&activeSensors)
-	
+
 	// Get type statistics
 	var sensors []models.Sensor
 	facades.Orm().Query().Find(&sensors)
-	
+
 	// Count occurrences of each type
 	typeCounts := make(map[string]int)
 	for _, sensor := range sensors {
@@ -500,7 +518,7 @@ func (r *SensorController) GetStatistics(ctx http.Context) http.Response {
 			typeCounts[sensorType]++
 		}
 	}
-	
+
 	// Convert to expected format
 	typeStats := make([]map[string]interface{}, 0, len(typeCounts))
 	for typeName, count := range typeCounts {
@@ -509,12 +527,12 @@ func (r *SensorController) GetStatistics(ctx http.Context) http.Response {
 			"count": count,
 		})
 	}
-	
+
 	return ctx.Response().Json(http.StatusOK, map[string]interface{}{
-		"total_sensors":    totalSensors,
-		"active_sensors":   activeSensors,
-		"sensors_by_type":  typeStats,
-		"supported_types":  models.GetSupportedTypes(),
-		"generated_at":     time.Now(),
+		"total_sensors":   totalSensors,
+		"active_sensors":  activeSensors,
+		"sensors_by_type": typeStats,
+		"supported_types": models.GetSupportedTypes(),
+		"generated_at":    time.Now(),
 	})
 }
