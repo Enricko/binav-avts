@@ -181,7 +181,7 @@ func (s *TCPSensorService) processMessage(msg string) {
 		}
 
 		buffer.LastRecordTime = time.Now()
-		facades.Log().Info(fmt.Sprintf("Created record for sensor %s", sensorID))
+		// facades.Log().Info(fmt.Sprintf("Created record for sensor %s", sensorID))
 	}
 }
 

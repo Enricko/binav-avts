@@ -36,8 +36,8 @@ const navItems = [
   },
   {
     icon: "bi bi-layers",
-    label: "GeoLayer",
-    action: () => console.log("GeoLayer clicked"),
+    label: "Geolayers", // Changed from "Overlays" to "Geolayers"
+    action: () => openGeolayerModal(), // Changed to openGeolayerModal()
   },
   {
     icon: "bi bi-people",
@@ -111,6 +111,20 @@ measureButton.title = "Measure distance";
 
 measureContainer.appendChild(measureButton);
 
+// Create overlay button
+const overlayContainer = document.createElement("div");
+overlayContainer.className = "overlay-control";
+
+const overlayButton = document.createElement("button");
+overlayButton.className = "overlay-button";
+overlayButton.innerHTML = `
+  <i class="bi bi-layers"></i>
+`;
+overlayButton.title = "Map Overlays";
+overlayButton.addEventListener("click", () => openOverlayModal());
+
+overlayContainer.appendChild(overlayButton);
+
 // Create search control
 const searchContainer = document.createElement("div");
 searchContainer.className = "search-control";
@@ -140,6 +154,7 @@ const mapElement = document.querySelector("#map");
 if (mapElement) {
   mapElement.appendChild(zoomContainer);
   mapElement.appendChild(measureContainer);
+  mapElement.appendChild(overlayContainer); // Add overlay control to map
   mapElement.appendChild(navContainer);
   mapElement.appendChild(searchContainer);
 }
@@ -474,6 +489,122 @@ function openSensorModal() {
   bootstrapModal.show();
 }
 
+// Function to open the overlay modal
+function openGeolayerModal() {
+  // Check if modal already exists
+  let geolayerModal = document.getElementById("geolayerManagementModal");
+
+  if (!geolayerModal) {
+    // Create the modal element
+    geolayerModal = document.createElement("div");
+    geolayerModal.id = "geolayerManagementModal";
+    geolayerModal.className = "modal fade";
+    geolayerModal.setAttribute("tabindex", "-1");
+    geolayerModal.setAttribute(
+      "aria-labelledby",
+      "geolayerManagementModalLabel"
+    );
+    geolayerModal.setAttribute("aria-hidden", "true");
+
+    // Set the modal HTML structure
+    geolayerModal.innerHTML = `
+      <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="geolayerManagementModalLabel">Geo Layers</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body p-0">
+            <div id="geolayerContentContainer">
+              <div class="d-flex justify-content-center p-5">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Append modal to body
+    document.body.appendChild(geolayerModal);
+  }
+
+  // Initialize bootstrap modal
+  const bootstrapModal = new bootstrap.Modal(geolayerModal);
+
+  // Load content from route
+  loadGeolayerContent();
+
+  // Show the modal
+  bootstrapModal.show();
+}
+
+// Function to load content from the Overlay index route
+function loadGeolayerContent() {
+  const contentContainer = document.getElementById("geolayerContentContainer");
+
+  // Clear existing content and show loading spinner
+  contentContainer.innerHTML = `
+    <div class="d-flex justify-content-center p-5">
+      <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+    </div>
+  `;
+
+  // Fetch the content from the route - using geolayers backend endpoint
+  fetch("/api/geolayers/view")
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.text();
+    })
+    .then(async (html) => {
+      // Insert the HTML content
+      contentContainer.innerHTML = html;
+
+      // Initialize geolayer management functionality
+      if (typeof initGeolayersManagement === "function") {
+        console.log("Calling initGeolayersManagement directly");
+        initGeolayersManagement();
+      } else {
+        // If the function isn't available directly, try importing it
+        try {
+          // Try to import geolayer management script
+          console.log("Trying to import geolayer management script");
+          const module = await import(
+            "./../../management/geolayer_management.js"
+          );
+          if (typeof module.initGeolayersManagement === "function") {
+            console.log("Calling imported initGeolayersManagement");
+            module.initGeolayersManagement();
+          } else {
+            console.error(
+              "initGeolayersManagement function not found in imported module"
+            );
+          }
+        } catch (error) {
+          console.error("Failed to load geolayer management script:", error);
+        }
+      }
+    })
+    .catch((error) => {
+      // Show error message
+      contentContainer.innerHTML = `
+        <div class="alert alert-danger m-3">
+          <h5>Failed to load geolayer management</h5>
+          <p>${error.message}</p>
+          <button class="btn btn-sm btn-outline-danger" onclick="loadGeolayerContent()">
+            <i class="bi bi-arrow-clockwise"></i> Retry
+          </button>
+        </div>
+      `;
+    });
+}
+
 function loadVesselContent() {
   const contentContainer = document.getElementById("vesselContentContainer");
 
@@ -557,7 +688,9 @@ function loadSensorContent() {
       } else {
         // If the function isn't available directly, try importing it
         try {
-          const module = await import("./../../management/sensor_management.js");
+          const module = await import(
+            "./../../management/sensor_management.js"
+          );
           if (typeof module.initSensorsDatatable === "function") {
             module.initSensorsDatatable();
           }
@@ -583,6 +716,8 @@ function loadSensorContent() {
 // Make the functions globally available
 window.openVesselModal = openVesselModal;
 window.openSensorModal = openSensorModal;
+window.openOverlayModal = openOverlayModal;
 window.loadVesselContent = loadVesselContent;
 window.loadSensorContent = loadSensorContent;
+window.loadOverlayContent = loadOverlayContent;
 window.updateDropdown = updateDropdown;

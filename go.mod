@@ -12,7 +12,12 @@ require (
 	google.golang.org/grpc v1.70.0
 )
 
-require github.com/maurice2k/ultrapool v1.1.1 // indirect
+require (
+	github.com/mattn/go-sqlite3 v1.14.24 // indirect
+	github.com/maurice2k/ultrapool v1.1.1 // indirect
+	github.com/paulmach/orb v0.11.1 // indirect
+	github.com/twpayne/go-geom v1.6.0 // indirect
+)
 
 require (
 	atomicgo.dev/cursor v0.2.0 // indirect

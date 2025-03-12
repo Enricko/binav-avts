@@ -14,7 +14,7 @@ func Web() {
 
 	main := controllers.NewController()
 	facades.Route().Get("/", main.Index)
-
+	
 	auth := controllers.NewAuthController()
 
 	facades.Route().Group(func(r route.Router) {
@@ -23,14 +23,7 @@ func Web() {
 		r.Post("/auth/reset-password/verify", auth.VerifyOTP)
 		r.Post("/auth/reset-password/reset", auth.ResetPassword)
 	})
-
-	geolayerController := controllers.NewGeolayerController()
-
-	facades.Route().Get("/geolayers", geolayerController.Index)
-	facades.Route().Post("/geolayers", geolayerController.Store)
-	facades.Route().Delete("/geolayers/{id}", geolayerController.Destroy)
-
+	
 	facades.Route().Get("/api/vessel/stream-history", (&controllers.VesselRecordController{}).StreamHistory)
 	facades.Route().Get("/api/sensors/history/stream", (&controllers.SensorController{}).GetHistorySensorStream)
-
 }
