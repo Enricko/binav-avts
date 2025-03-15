@@ -150,7 +150,7 @@ export function initVesselsDatatable() {
       const flag = document.getElementById("filterFlag").value;
       const kelas = document.getElementById("filterClass").value;
       const recordStatus = document.getElementById("filterStatus").value;
-      const withTrashed = document.getElementById("showDeleted").checked;
+      const withTrashed = document.getElementById("showDeletedVessel").checked;
 
       // Prepare query parameters
       const params = {
@@ -350,7 +350,7 @@ export function initVesselsDatatable() {
     });
 
     // Show deleted checkbox change
-    document.getElementById("showDeleted").addEventListener("change", () => {
+    document.getElementById("showDeletedVessel").addEventListener("change", () => {
       currentPage = 1; // Reset to first page when toggling deleted
       loadVessels();
     });

@@ -149,9 +149,9 @@ func (ws *WebSocketService) updateCache() {
 		ws.kapalCache = newKapalCache
 	}
 
-	// Update sensor cache
+	// Update sensor cache - also filter out soft-deleted records
 	var sensors []models.Sensor
-	if err := facades.Orm().Query().Find(&sensors); err == nil {
+	if err := facades.Orm().Query().WhereNull("deleted_at").Find(&sensors); err == nil {
 		newSensorCache := make(map[string]*models.Sensor)
 		for i := range sensors {
 			newSensorCache[sensors[i].ID] = &sensors[i]
@@ -330,18 +330,12 @@ func (ws *WebSocketService) getSensorData() map[string]SensorData {
 			buffer.mutex.Unlock()
 		} else {
 			// If no buffer, get latest record
-			var record models.SensorRecord
-			err := facades.Orm().Query().
-				Where("id_sensor = ?", sensorID).
-				Order("created_at DESC").
-				First(&record)
-
-			if err == nil {
-				rawData = record.RawData
-				lastUpdate = record.CreatedAt
-			} else {
+			record := getLastSensorRecord(sensorID)
+			if record == nil {
 				continue // Skip if no data available
 			}
+			rawData = record.RawData
+			lastUpdate = record.CreatedAt
 		}
 
 		sensorData[sensorID] = SensorData{
@@ -356,6 +350,20 @@ func (ws *WebSocketService) getSensorData() map[string]SensorData {
 	}
 
 	return sensorData
+}
+
+// getLastSensorRecord retrieves the most recent record for a sensor
+func getLastSensorRecord(sensorID string) *models.SensorRecord {
+	var lastRecord models.SensorRecord
+	err := facades.Orm().Query().
+		Where("id_sensor = ?", sensorID).
+		WhereNull("deleted_at").
+		Where("id = (SELECT MAX(id) FROM sensor_records WHERE id_sensor = ? AND deleted_at IS NULL)", sensorID).
+		First(&lastRecord)
+	if err != nil {
+		return nil
+	}
+	return &lastRecord
 }
 
 // broadcastToClients sends data to all connected WebSocket clients
@@ -472,7 +480,8 @@ func getLastRecord(callSign string) *models.VesselRecord {
 	var lastRecord models.VesselRecord
 	err := facades.Orm().Query().
 		Where("call_sign = ?", callSign).
-		Order("created_at DESC").
+		WhereNull("deleted_at").
+		Where("id = (SELECT MAX(id) FROM vessel_records WHERE call_sign = ? AND deleted_at IS NULL)", callSign).
 		First(&lastRecord)
 	if err != nil {
 		return nil

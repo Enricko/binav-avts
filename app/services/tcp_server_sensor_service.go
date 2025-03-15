@@ -141,6 +141,26 @@ func (s *TCPSensorService) decrementConnections() {
 	}
 }
 
+// extractTimestamp attempts to extract a timestamp from the raw sensor data
+// This function searches for a pattern like "TS:yyyy-mm-dd HH:MM:SS" in the raw data
+func extractTimestamp(rawData string) (time.Time, error) {
+	// Regex to match a timestamp in the format "TS:2023-01-01 12:34:56" or similar format
+	re := regexp.MustCompile(`TS:(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})`)
+	matches := re.FindStringSubmatch(rawData)
+
+	if len(matches) < 2 {
+		return time.Time{}, fmt.Errorf("timestamp not found in raw data")
+	}
+
+	// Parse the timestamp
+	timestamp, err := time.Parse("2006-01-02 15:04:05", matches[1])
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to parse timestamp: %v", err)
+	}
+
+	return timestamp, nil
+}
+
 // processMessage handles an incoming sensor message
 func (s *TCPSensorService) processMessage(msg string) {
 	re := regexp.MustCompile(`ID:(\d+)`)
@@ -169,9 +189,18 @@ func (s *TCPSensorService) processMessage(msg string) {
 	buffer.LastUpdateTime = time.Now()
 
 	if time.Since(buffer.LastRecordTime) >= time.Second {
+		// Extract timestamp from raw data
+		timestamp, err := extractTimestamp(buffer.RawData)
+		if err != nil {
+			facades.Log().Warning(fmt.Sprintf("Could not extract timestamp from sensor data: %v. Using current time instead.", err))
+			timestamp = time.Now()
+		}
+
 		record := &models.SensorRecord{
-			IDSensor: sensorID,
-			RawData:  buffer.RawData,
+			IDSensor:  sensorID,
+			RawData:   buffer.RawData,
+			CreatedAt: timestamp, // Use the extracted timestamp for created_at
+			UpdatedAt: timestamp, // Use the same timestamp for updated_at
 		}
 
 		err = facades.Orm().Query().Create(record)

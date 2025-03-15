@@ -131,7 +131,7 @@ func (s *TCPVesselService) markAllVesselsDisconnected() {
 		var lastRecord models.VesselRecord
 		err := facades.Orm().Query().
 			Where("call_sign = ?", vessel.CallSign).
-			Order("created_at DESC").
+			Where("id = (SELECT MAX(id) FROM vessel_records WHERE call_sign = ?)", vessel.CallSign).
 			First(&lastRecord)
 
 		if err == nil {
@@ -358,6 +358,7 @@ func (s *TCPVesselService) processGGAData(kapal models.Kapal, data string) {
 }
 
 // createVesselRecord stores vessel data in the database
+// createVesselRecord stores vessel data in the database
 func (s *TCPVesselService) createVesselRecord(callSign string, buffer *NMEABuffer, historyPerSecond int64) {
 	// Only create record if we have the minimum required data
 	if buffer.Latitude == "" || buffer.Longitude == "" {
@@ -366,7 +367,10 @@ func (s *TCPVesselService) createVesselRecord(callSign string, buffer *NMEABuffe
 	}
 
 	var lastRecord models.VesselRecord
-	err := facades.Orm().Query().Where("call_sign = ?", callSign).Order("created_at DESC").First(&lastRecord)
+	err := facades.Orm().Query().
+		Where("call_sign = ?", callSign).
+		Where("id = (SELECT MAX(id) FROM vessel_records WHERE call_sign = ?)", callSign).
+		First(&lastRecord)
 
 	newRecord := &models.VesselRecord{
 		CallSign:            callSign,
@@ -478,8 +482,8 @@ func (s *TCPVesselService) updateLastRecordStatus(kapal models.Kapal, data strin
 	var lastRecord models.VesselRecord
 	err := facades.Orm().Query().
 		Where("call_sign = ?", kapal.CallSign).
-		Order("created_at DESC").
-		FirstOrFail(&lastRecord)
+		Where("id = (SELECT MAX(id) FROM vessel_records WHERE call_sign = ?)", kapal.CallSign).
+		First(&lastRecord)
 
 	if err != nil {
 		facades.Log().Error(fmt.Sprintf("Failed to fetch last record for %s: %v", kapal.CallSign, err))

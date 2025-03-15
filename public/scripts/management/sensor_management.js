@@ -97,7 +97,7 @@ export function initSensorsDatatable() {
 
       // Get filter values
       const type = document.getElementById("filterType").value;
-      const withTrashed = document.getElementById("showDeleted").checked;
+      const withTrashed = document.getElementById("showDeletedSensor").checked;
 
       // Prepare query parameters
       const params = {
@@ -310,7 +310,7 @@ export function initSensorsDatatable() {
     });
 
     // Show deleted checkbox change
-    document.getElementById("showDeleted").addEventListener("change", () => {
+    document.getElementById("showDeletedSensor").addEventListener("change", () => {
       currentPage = 1; // Reset to first page when toggling deleted
       loadSensors();
     });
